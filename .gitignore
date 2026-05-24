@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+live_state.json
+trade_log.json
+.env
+*.log
