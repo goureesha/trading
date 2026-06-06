@@ -103,6 +103,20 @@ def vwap(df: pd.DataFrame) -> pd.Series:
     return typical_price
 
 
+def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Average Directional Index - measures trend strength (>25 = trending)."""
+    high, low, close = df["High"], df["Low"], df["Close"]
+    plus_dm = high.diff()
+    minus_dm = -low.diff()
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+    atr_val = atr(df, period)
+    plus_di = 100 * (plus_dm.ewm(alpha=1/period, min_periods=period).mean() / atr_val)
+    minus_di = 100 * (minus_dm.ewm(alpha=1/period, min_periods=period).mean() / atr_val)
+    dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di))
+    return dx.ewm(alpha=1/period, min_periods=period).mean()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # STRATEGY BASE CLASS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -878,6 +892,202 @@ class ICTFVGVWAP(Strategy):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ORB – OPENING RANGE BREAKOUT (first N candles define the range)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ORBStrategy(Strategy):
+    name = "Opening Range Breakout"
+    description = "Trade breakout of first 15-min range (3 x 5-min candles)"
+
+    def __init__(self, orb_candles=3, rr_ratio=2.0, **kw):
+        super().__init__(**kw)
+        self.orb_candles = orb_candles  # 3 candles of 5-min = 15 min range
+        self.rr_ratio = rr_ratio
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["signal"] = 0
+        df["stop_loss"] = np.nan
+        df["target"] = np.nan
+        df["atr"] = atr(df, 14)
+
+        # Group candles by trading day
+        if not hasattr(df.index[0], 'hour'):
+            # Daily candles – ORB doesn't apply
+            return df
+
+        dates = df.index.date
+        unique_dates = sorted(set(dates))
+
+        for day in unique_dates:
+            day_mask = dates == day
+            day_df = df[day_mask]
+
+            if len(day_df) < self.orb_candles + 1:
+                continue
+
+            # First N candles define the opening range
+            orb_high = day_df["High"].iloc[:self.orb_candles].max()
+            orb_low = day_df["Low"].iloc[:self.orb_candles].min()
+            orb_range = orb_high - orb_low
+
+            if orb_range <= 0:
+                continue
+
+            # Only trade between 9:45 AM and 2:30 PM
+            breakout_done = False
+            for j in range(self.orb_candles, len(day_df)):
+                idx = day_df.index[j]
+                if idx.hour >= 14 and idx.minute >= 30:
+                    break  # Too late in the day
+                if idx.hour < 9 or (idx.hour == 9 and idx.minute < 30):
+                    continue  # Pre-market
+
+                if breakout_done:
+                    break  # One trade per day
+
+                close = day_df["Close"].iloc[j]
+                high = day_df["High"].iloc[j]
+                low = day_df["Low"].iloc[j]
+
+                # Bullish breakout
+                if high > orb_high and not breakout_done:
+                    df.loc[idx, "signal"] = 1
+                    df.loc[idx, "stop_loss"] = orb_low
+                    df.loc[idx, "target"] = orb_high + self.rr_ratio * orb_range
+                    breakout_done = True
+                # Bearish breakout
+                elif low < orb_low and not breakout_done:
+                    df.loc[idx, "signal"] = -1
+                    df.loc[idx, "stop_loss"] = orb_high
+                    df.loc[idx, "target"] = orb_low - self.rr_ratio * orb_range
+                    breakout_done = True
+
+        return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADX + FVG + VWAP – Only trade strong trends with ICT confirmation
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ADXFVGStrategy(Strategy):
+    name = "ADX + FVG + VWAP"
+    description = "FVG + VWAP filtered by ADX > 25 (strong trend only)"
+
+    def __init__(self, adx_threshold=25, **kw):
+        super().__init__(**kw)
+        self.adx_threshold = adx_threshold
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["signal"] = 0
+        df["stop_loss"] = np.nan
+        df["target"] = np.nan
+
+        # Indicators
+        df["ema9"] = ema(df["Close"], 9)
+        df["ema21"] = ema(df["Close"], 21)
+        df["vwap_val"] = vwap(df)
+        df["atr"] = atr(df, 14)
+        df["adx_val"] = adx(df, 14)
+
+        for i in range(3, len(df)):
+            adx_val = df["adx_val"].iloc[i]
+            if np.isnan(adx_val) or adx_val < self.adx_threshold:
+                continue  # Skip choppy markets
+
+            # Time filter for intraday
+            if hasattr(df.index[i], 'hour'):
+                h, m = df.index[i].hour, df.index[i].minute
+                if h < 9 or (h == 9 and m < 30):
+                    continue
+                if h >= 14 and m >= 30:
+                    continue
+
+            # FVG detection
+            h0, l0 = df["High"].iloc[i - 2], df["Low"].iloc[i - 2]
+            h2, l2 = df["High"].iloc[i], df["Low"].iloc[i]
+            close = df["Close"].iloc[i]
+            atr_val = df["atr"].iloc[i]
+
+            if np.isnan(atr_val) or atr_val <= 0:
+                continue
+
+            # Bullish FVG: gap between candle i-2 high and candle i low
+            if l2 > h0 and close > df["vwap_val"].iloc[i] and close > df["ema21"].iloc[i]:
+                df.iloc[i, df.columns.get_loc("signal")] = 1
+                sl = close - 1.5 * atr_val
+                df.iloc[i, df.columns.get_loc("stop_loss")] = sl
+                df.iloc[i, df.columns.get_loc("target")] = close + 2 * abs(close - sl)
+
+            # Bearish FVG
+            elif h2 < l0 and close < df["vwap_val"].iloc[i] and close < df["ema21"].iloc[i]:
+                df.iloc[i, df.columns.get_loc("signal")] = -1
+                sl = close + 1.5 * atr_val
+                df.iloc[i, df.columns.get_loc("stop_loss")] = sl
+                df.iloc[i, df.columns.get_loc("target")] = close - 2 * abs(sl - close)
+
+        return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VWAP + RSI + Volume – Mean reversion with volume confirmation
+# ─────────────────────────────────────────────────────────────────────────────
+
+class VWAPRSIVolume(Strategy):
+    name = "VWAP + RSI + Volume"
+    description = "Mean reversion at VWAP with RSI oversold/overbought + volume spike"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["signal"] = 0
+        df["stop_loss"] = np.nan
+        df["target"] = np.nan
+
+        df["vwap_val"] = vwap(df)
+        df["rsi_val"] = rsi(df["Close"], 14)
+        df["atr"] = atr(df, 14)
+        df["vol_sma"] = sma(df["Volume"], 20) if "Volume" in df.columns else pd.Series(1, index=df.index)
+
+        for i in range(21, len(df)):
+            rsi_val = df["rsi_val"].iloc[i]
+            close = df["Close"].iloc[i]
+            vwap_val = df["vwap_val"].iloc[i]
+            atr_val = df["atr"].iloc[i]
+            vol = df["Volume"].iloc[i] if "Volume" in df.columns else 1
+            vol_avg = df["vol_sma"].iloc[i]
+
+            if np.isnan(rsi_val) or np.isnan(atr_val) or atr_val <= 0:
+                continue
+
+            # Time filter for intraday
+            if hasattr(df.index[i], 'hour'):
+                h, m = df.index[i].hour, df.index[i].minute
+                if h < 9 or (h == 9 and m < 30):
+                    continue
+                if h >= 14 and m >= 30:
+                    continue
+
+            vol_spike = vol > 1.5 * vol_avg if vol_avg > 0 else False
+
+            # Bullish: RSI oversold + price near/below VWAP + volume spike
+            if rsi_val < 35 and close <= vwap_val * 1.002 and vol_spike:
+                df.iloc[i, df.columns.get_loc("signal")] = 1
+                sl = close - 1.5 * atr_val
+                df.iloc[i, df.columns.get_loc("stop_loss")] = sl
+                df.iloc[i, df.columns.get_loc("target")] = close + 2 * abs(close - sl)
+
+            # Bearish: RSI overbought + price near/above VWAP + volume spike
+            elif rsi_val > 65 and close >= vwap_val * 0.998 and vol_spike:
+                df.iloc[i, df.columns.get_loc("signal")] = -1
+                sl = close + 1.5 * atr_val
+                df.iloc[i, df.columns.get_loc("stop_loss")] = sl
+                df.iloc[i, df.columns.get_loc("target")] = close - 2 * abs(sl - close)
+
+        return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # REGISTRY
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -897,6 +1107,10 @@ ALL_STRATEGIES = {
     "ict_ote": ICTOptimalTradeEntry,
     # Hybrid
     "ict_fvg_vwap": ICTFVGVWAP,
+    # New Advanced Strategies
+    "orb": ORBStrategy,
+    "adx_fvg": ADXFVGStrategy,
+    "vwap_rsi_vol": VWAPRSIVolume,
 }
 
 
@@ -915,5 +1129,10 @@ def list_strategies():
     print(f"\n  {'--- ICT (Inner Circle Trader) ---':^70}")
     ict = ["ict_fvg", "ict_orderblock", "ict_liquidity", "ict_ote"]
     for key in ict:
+        cls = ALL_STRATEGIES[key]
+        print(f"  {key:<20} {cls.name:<25} {cls.description}")
+    print(f"\n  {'--- Advanced / Hybrid ---':^70}")
+    adv = ["ict_fvg_vwap", "orb", "adx_fvg", "vwap_rsi_vol"]
+    for key in adv:
         cls = ALL_STRATEGIES[key]
         print(f"  {key:<20} {cls.name:<25} {cls.description}")

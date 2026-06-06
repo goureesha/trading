@@ -290,14 +290,42 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                 if row["Low"] <= position["stop_loss"]:
                     close_price = position["stop_loss"]
                     close_reason = f"Stop Loss (T{position['targets_hit']})"
-                # Check target hit → trail SL, don't close
+                # Check target hit → partial book + trail SL
                 elif row["High"] >= position["current_target"]:
                     position["targets_hit"] += 1
-                    # Trail SL to previous target level
+
+                    # Partial profit booking: book 50% at first target
+                    if position["targets_hit"] == 1 and position["qty"] > 1:
+                        partial_qty = position["qty"] // 2
+                        if partial_qty > 0:
+                            partial_price = position["current_target"]
+                            partial_pnl = (partial_price - position["entry_price"]) * partial_qty
+                            partial_comm = (position["entry_price"] * partial_qty * commission_pct / 100) + \
+                                           (partial_price * partial_qty * commission_pct / 100)
+                            partial_pnl -= partial_comm
+                            partial_pct = (partial_pnl / (position["entry_price"] * partial_qty)) * 100
+                            current_capital += partial_pnl
+                            trades.append({
+                                "entry_date": position["entry_date"],
+                                "exit_date": signals_df.index[i],
+                                "direction": position["direction"],
+                                "entry_price": round(position["entry_price"], 2),
+                                "exit_price": round(partial_price, 2),
+                                "stop_loss": round(position["stop_loss"], 2),
+                                "target": round(position["current_target"], 2),
+                                "qty": partial_qty,
+                                "pnl": round(partial_pnl, 2),
+                                "pnl_pct": round(partial_pct, 2),
+                                "exit_reason": "Partial Book (50%)",
+                                "hold_bars": i - position["entry_idx"],
+                            })
+                            equity_curve.append(current_capital)
+                            position["qty"] -= partial_qty
+
+                    # Trail SL to target level, set new target
                     position["stop_loss"] = position["current_target"]
-                    # Set new target (add another risk unit)
                     position["current_target"] += position["risk_distance"]
-                    close_price = None  # DON'T close, let it run
+                    close_price = None  # DON'T close remaining, let it run
                 # Check exit signal
                 elif signal == -1:
                     close_price = row["Close"]
@@ -309,9 +337,38 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                     close_reason = f"Stop Loss (T{position['targets_hit']})"
                 elif row["Low"] <= position["current_target"]:
                     position["targets_hit"] += 1
+
+                    # Partial profit booking: book 50% at first target
+                    if position["targets_hit"] == 1 and position["qty"] > 1:
+                        partial_qty = position["qty"] // 2
+                        if partial_qty > 0:
+                            partial_price = position["current_target"]
+                            partial_pnl = (position["entry_price"] - partial_price) * partial_qty
+                            partial_comm = (position["entry_price"] * partial_qty * commission_pct / 100) + \
+                                           (partial_price * partial_qty * commission_pct / 100)
+                            partial_pnl -= partial_comm
+                            partial_pct = (partial_pnl / (position["entry_price"] * partial_qty)) * 100
+                            current_capital += partial_pnl
+                            trades.append({
+                                "entry_date": position["entry_date"],
+                                "exit_date": signals_df.index[i],
+                                "direction": position["direction"],
+                                "entry_price": round(position["entry_price"], 2),
+                                "exit_price": round(partial_price, 2),
+                                "stop_loss": round(position["stop_loss"], 2),
+                                "target": round(position["current_target"], 2),
+                                "qty": partial_qty,
+                                "pnl": round(partial_pnl, 2),
+                                "pnl_pct": round(partial_pct, 2),
+                                "exit_reason": "Partial Book (50%)",
+                                "hold_bars": i - position["entry_idx"],
+                            })
+                            equity_curve.append(current_capital)
+                            position["qty"] -= partial_qty
+
                     position["stop_loss"] = position["current_target"]
                     position["current_target"] -= position["risk_distance"]
-                    close_price = None  # DON'T close, let it run
+                    close_price = None  # DON'T close remaining, let it run
                 elif signal == 1:
                     close_price = row["Close"]
                     close_reason = "Exit Signal"
