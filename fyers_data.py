@@ -131,8 +131,20 @@ def _headers():
 def resolve_symbol(stock, exchange="NSE"):
     """Convert stock name to Fyers symbol format."""
     stock = stock.upper().strip()
-    # Remove .NS / .BO suffixes if present
     stock = stock.replace(".NS", "").replace(".BO", "")
+
+    # Index symbols
+    INDEX_MAP = {
+        "NIFTY": "NSE:NIFTY50-INDEX",
+        "NIFTY50": "NSE:NIFTY50-INDEX",
+        "BANKNIFTY": "NSE:NIFTYBANK-INDEX",
+        "NIFTYBANK": "NSE:NIFTYBANK-INDEX",
+        "NIFTYIT": "NSE:NIFTYIT-INDEX",
+        "FINNIFTY": "NSE:FINNIFTY-INDEX",
+    }
+    if stock in INDEX_MAP:
+        return INDEX_MAP[stock]
+
     if exchange == "BSE":
         return f"BSE:{stock}-EQ"
     return f"NSE:{stock}-EQ"

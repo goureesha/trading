@@ -207,7 +207,8 @@ class BacktestResult:
 
 def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                  interval: str = "1d", capital: float = 100000,
-                 position_size_pct: float = 100, commission_pct: float = 0.05) -> Optional[BacktestResult]:
+                 position_size_pct: float = 100, commission_pct: float = 0.05,
+                 trailing_sl: bool = False, trailing_atr_mult: float = 1.5) -> Optional[BacktestResult]:
     """
     Run a backtest for a given strategy on a stock.
 
@@ -219,6 +220,8 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
         capital: Starting capital in Rs.
         position_size_pct: % of capital to use per trade
         commission_pct: Commission per trade in %
+        trailing_sl: Enable trailing stop loss
+        trailing_atr_mult: ATR multiplier for trailing distance
     """
     # Fetch data
     df = fetch_data(symbol, period, interval)
@@ -239,7 +242,45 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
         row = signals_df.iloc[i]
         signal = row.get("signal", 0)
 
-        # Check if we need to close position (hit SL or Target)
+        # ── 3:15 PM intraday exit ──
+        if position is not None:
+            try:
+                bar_time = signals_df.index[i]
+                if hasattr(bar_time, 'hour'):
+                    if bar_time.hour == 15 and bar_time.minute >= 15:
+                        close_price = row["Close"]
+                        close_reason = "3:15 PM Exit"
+                        # Close the trade
+                        if position["direction"] == "LONG":
+                            pnl = (close_price - position["entry_price"]) * position["qty"]
+                        else:
+                            pnl = (position["entry_price"] - close_price) * position["qty"]
+                        commission = (position["entry_price"] * position["qty"] * commission_pct / 100) + \
+                                     (close_price * position["qty"] * commission_pct / 100)
+                        pnl -= commission
+                        pnl_pct = (pnl / (position["entry_price"] * position["qty"])) * 100
+                        current_capital += pnl
+                        trades.append({
+                            "entry_date": position["entry_date"],
+                            "exit_date": signals_df.index[i],
+                            "direction": position["direction"],
+                            "entry_price": round(position["entry_price"], 2),
+                            "exit_price": round(close_price, 2),
+                            "stop_loss": round(position["stop_loss"], 2),
+                            "target": round(position["current_target"], 2),
+                            "qty": position["qty"],
+                            "pnl": round(pnl, 2),
+                            "pnl_pct": round(pnl_pct, 2),
+                            "exit_reason": close_reason,
+                            "hold_bars": i - position["entry_idx"],
+                        })
+                        position = None
+                        equity_curve.append(current_capital)
+                        continue
+            except Exception:
+                pass
+
+        # ── Check SL / Target for open position ──
         if position is not None:
             close_price = None
             close_reason = None
@@ -248,11 +289,15 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                 # Check stop loss
                 if row["Low"] <= position["stop_loss"]:
                     close_price = position["stop_loss"]
-                    close_reason = "Stop Loss"
-                # Check target
-                elif row["High"] >= position["target"]:
-                    close_price = position["target"]
-                    close_reason = "Target Hit"
+                    close_reason = f"Stop Loss (T{position['targets_hit']})"
+                # Check target hit → trail SL, don't close
+                elif row["High"] >= position["current_target"]:
+                    position["targets_hit"] += 1
+                    # Trail SL to previous target level
+                    position["stop_loss"] = position["current_target"]
+                    # Set new target (add another risk unit)
+                    position["current_target"] += position["risk_distance"]
+                    close_price = None  # DON'T close, let it run
                 # Check exit signal
                 elif signal == -1:
                     close_price = row["Close"]
@@ -261,10 +306,12 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
             elif position["direction"] == "SHORT":
                 if row["High"] >= position["stop_loss"]:
                     close_price = position["stop_loss"]
-                    close_reason = "Stop Loss"
-                elif row["Low"] <= position["target"]:
-                    close_price = position["target"]
-                    close_reason = "Target Hit"
+                    close_reason = f"Stop Loss (T{position['targets_hit']})"
+                elif row["Low"] <= position["current_target"]:
+                    position["targets_hit"] += 1
+                    position["stop_loss"] = position["current_target"]
+                    position["current_target"] -= position["risk_distance"]
+                    close_price = None  # DON'T close, let it run
                 elif signal == 1:
                     close_price = row["Close"]
                     close_reason = "Exit Signal"
@@ -290,7 +337,7 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                     "entry_price": round(position["entry_price"], 2),
                     "exit_price": round(close_price, 2),
                     "stop_loss": round(position["stop_loss"], 2),
-                    "target": round(position["target"], 2),
+                    "target": round(position["current_target"], 2),
                     "qty": position["qty"],
                     "pnl": round(pnl, 2),
                     "pnl_pct": round(pnl_pct, 2),
@@ -301,14 +348,26 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                 position = None
                 equity_curve.append(current_capital)
 
-        # Open new position
+        # ── Open new position ──
         if position is None and signal != 0:
             entry_price = row["Close"]
             sl = row.get("stop_loss", np.nan)
             target = row.get("target", np.nan)
 
-            if np.isnan(sl) or np.isnan(target) or np.isnan(entry_price):
+            if np.isnan(sl) or np.isnan(entry_price):
                 continue
+
+            # Calculate risk distance from strategy SL
+            risk_distance = abs(entry_price - sl)
+            if risk_distance <= 0:
+                continue
+
+            # If no target from strategy, use 1:2 R:R
+            if np.isnan(target):
+                if signal == 1:
+                    target = entry_price + 2 * risk_distance
+                else:
+                    target = entry_price - 2 * risk_distance
 
             trade_capital = current_capital * (position_size_pct / 100)
             qty = int(trade_capital / entry_price)
@@ -320,7 +379,10 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
                 "direction": "LONG" if signal == 1 else "SHORT",
                 "entry_price": entry_price,
                 "stop_loss": sl,
-                "target": target,
+                "initial_sl": sl,
+                "current_target": target,
+                "risk_distance": risk_distance,
+                "targets_hit": 0,
                 "qty": qty,
                 "entry_date": signals_df.index[i],
                 "entry_idx": i,
@@ -347,7 +409,7 @@ def run_backtest(strategy_name: str, symbol: str, period: str = "1y",
             "entry_price": round(position["entry_price"], 2),
             "exit_price": round(close_price, 2),
             "stop_loss": round(position["stop_loss"], 2),
-            "target": round(position["target"], 2),
+            "target": round(position["current_target"], 2),
             "qty": position["qty"],
             "pnl": round(pnl, 2),
             "pnl_pct": round(pnl_pct, 2),
@@ -569,6 +631,8 @@ Examples:
     parser.add_argument("--capital", "-c", type=float, default=100000, help="Starting capital (default: 100000)")
     parser.add_argument("--compare", action="store_true", help="Compare all strategies side by side")
     parser.add_argument("--trades", action="store_true", help="Show individual trade log")
+    parser.add_argument("--trailing-sl", action="store_true", help="Enable trailing stop loss")
+    parser.add_argument("--trail-mult", type=float, default=1.5, help="ATR multiplier for trailing SL (default: 1.5)")
     parser.add_argument("--list", "-l", action="store_true", help="List available strategies")
 
     args = parser.parse_args()
@@ -599,7 +663,8 @@ Examples:
 
         for strat_name in strategies_to_test:
             print(f"  Testing {strat_name:<25}", end="", flush=True)
-            result = run_backtest(strat_name, symbol, args.period, args.interval, args.capital)
+            result = run_backtest(strat_name, symbol, args.period, args.interval, args.capital,
+                                   trailing_sl=args.trailing_sl, trailing_atr_mult=args.trail_mult)
             if result:
                 all_results.append(result)
                 color = Fore.GREEN if result.total_return_pct > 0 else Fore.RED

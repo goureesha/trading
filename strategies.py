@@ -795,6 +795,89 @@ class ICTOptimalTradeEntry(Strategy):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# STRATEGY 12: ICT FVG + VWAP COMBO
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ICTFVGVWAP(Strategy):
+    name = "ICT FVG + VWAP"
+    description = "FVG entries filtered by VWAP trend. Buy FVG only when price > VWAP, sell only when < VWAP."
+
+    def __init__(self, atr_sl_mult=1.5, atr_tp_mult=3.0, ema_period=21):
+        self.atr_sl_mult = atr_sl_mult
+        self.atr_tp_mult = atr_tp_mult
+        self.ema_period = ema_period
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["atr"] = atr(df)
+
+        # Calculate VWAP
+        typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
+        if "Volume" in df.columns and df["Volume"].sum() > 0:
+            cumvol = df["Volume"].cumsum()
+            cumtp = (typical_price * df["Volume"]).cumsum()
+            df["vwap"] = cumtp / cumvol
+        else:
+            df["vwap"] = typical_price.rolling(20).mean()
+
+        # EMA for additional trend confirmation
+        df["ema_trend"] = ema(df["Close"], self.ema_period)
+
+        # Detect FVGs
+        bullish_fvg, bearish_fvg, fvg_upper, fvg_lower = detect_fvg(df)
+
+        df["signal"] = 0
+
+        active_bull_fvgs = []
+        active_bear_fvgs = []
+
+        for i in range(len(df)):
+            # Register new FVGs
+            if bullish_fvg.iloc[i]:
+                active_bull_fvgs.append((fvg_upper.iloc[i], fvg_lower.iloc[i]))
+            if bearish_fvg.iloc[i]:
+                active_bear_fvgs.append((fvg_upper.iloc[i], fvg_lower.iloc[i]))
+
+            current_close = df["Close"].iloc[i]
+            current_vwap = df["vwap"].iloc[i]
+            current_ema = df["ema_trend"].iloc[i]
+
+            # Skip if VWAP/EMA not ready
+            if pd.isna(current_vwap) or pd.isna(current_ema):
+                continue
+
+            # BULLISH: FVG entry + price above VWAP + price above EMA
+            if current_close > current_vwap and current_close > current_ema:
+                new_bull = []
+                for upper, lower in active_bull_fvgs:
+                    if df["Low"].iloc[i] <= upper and current_close >= lower:
+                        if df["signal"].iloc[i] == 0:
+                            df.iloc[i, df.columns.get_loc("signal")] = 1
+                    else:
+                        new_bull.append((upper, lower))
+                active_bull_fvgs = new_bull[-5:]
+
+            # BEARISH: FVG entry + price below VWAP + price below EMA
+            elif current_close < current_vwap and current_close < current_ema:
+                new_bear = []
+                for upper, lower in active_bear_fvgs:
+                    if df["High"].iloc[i] >= lower and current_close <= upper:
+                        if df["signal"].iloc[i] == 0:
+                            df.iloc[i, df.columns.get_loc("signal")] = -1
+                    else:
+                        new_bear.append((upper, lower))
+                active_bear_fvgs = new_bear[-5:]
+
+        df["stop_loss"] = np.where(df["signal"] == 1, df["Close"] - self.atr_sl_mult * df["atr"],
+                           np.where(df["signal"] == -1, df["Close"] + self.atr_sl_mult * df["atr"], np.nan))
+        df["target"] = np.where(df["signal"] == 1, df["Close"] + self.atr_tp_mult * df["atr"],
+                        np.where(df["signal"] == -1, df["Close"] - self.atr_tp_mult * df["atr"], np.nan))
+        df["entry_price"] = np.where(df["signal"] != 0, df["Close"], np.nan)
+
+        return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # REGISTRY
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -812,6 +895,8 @@ ALL_STRATEGIES = {
     "ict_orderblock": ICTOrderBlock,
     "ict_liquidity": ICTLiquiditySweep,
     "ict_ote": ICTOptimalTradeEntry,
+    # Hybrid
+    "ict_fvg_vwap": ICTFVGVWAP,
 }
 
 
