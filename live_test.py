@@ -30,7 +30,6 @@ if sys.platform == 'win32':
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from colorama import Fore, Style, init
 from tabulate import tabulate
 
@@ -82,34 +81,71 @@ def save_trade_log(trades: list):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATA FETCHER
+# DATA FETCHER — Fyers API (primary) + Yahoo Finance (fallback)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_live_data(symbol: str, period: str = "5d", interval: str = "15m"):
-    """Fetch recent data for live analysis."""
-    for suffix in [".NS", ".BO"]:
-        try:
-            ticker = yf.Ticker(f"{symbol}{suffix}")
-            df = ticker.history(period=period, interval=interval)
-            if df is not None and not df.empty and len(df) >= 20:
-                if df.index.tz is not None:
-                    df.index = df.index.tz_localize(None)
+    """Fetch recent data for live analysis. Tries Fyers first, falls back to Yahoo."""
+    # Map period to days for Fyers
+    period_days = {
+        "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365,
+    }.get(period, 5)
+
+    # Try Fyers first
+    try:
+        from fyers_data import fetch_fyers_data, load_token
+        if load_token():
+            df = fetch_fyers_data(symbol, interval=interval, days=period_days)
+            if df is not None and len(df) >= 20:
+                df = df.set_index("date")
+                df.columns = [c.capitalize() for c in df.columns]
                 return df
-        except Exception:
-            continue
+    except Exception:
+        pass
+
+    # Fallback to Yahoo
+    try:
+        import yfinance as yf
+        for suffix in [".NS", ".BO"]:
+            try:
+                ticker = yf.Ticker(f"{symbol}{suffix}")
+                df = ticker.history(period=period, interval=interval)
+                if df is not None and not df.empty and len(df) >= 20:
+                    if df.index.tz is not None:
+                        df.index = df.index.tz_localize(None)
+                    return df
+            except Exception:
+                continue
+    except ImportError:
+        pass
     return None
 
 
 def get_current_price(symbol: str) -> float:
-    """Get the latest price for a stock."""
-    for suffix in [".NS", ".BO"]:
-        try:
-            ticker = yf.Ticker(f"{symbol}{suffix}")
-            info = ticker.history(period="1d", interval="1m")
-            if info is not None and not info.empty:
-                return info["Close"].iloc[-1]
-        except Exception:
-            continue
+    """Get the latest price for a stock. Tries Fyers quote, falls back to Yahoo."""
+    # Try Fyers quote
+    try:
+        from fyers_data import get_quote, load_token
+        if load_token():
+            q = get_quote(symbol)
+            if q and q["ltp"] > 0:
+                return q["ltp"]
+    except Exception:
+        pass
+
+    # Fallback to Yahoo
+    try:
+        import yfinance as yf
+        for suffix in [".NS", ".BO"]:
+            try:
+                ticker = yf.Ticker(f"{symbol}{suffix}")
+                info = ticker.history(period="1d", interval="1m")
+                if info is not None and not info.empty:
+                    return info["Close"].iloc[-1]
+            except Exception:
+                continue
+    except ImportError:
+        pass
     return 0
 
 

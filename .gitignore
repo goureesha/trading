@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
-*.pyo
+.fyers_token.json
+fyers_logs/
 live_state.json
 trade_log.json
-.env
-*.log
+graphify-out/

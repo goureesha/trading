@@ -28,7 +28,6 @@ if sys.platform == 'win32':
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from colorama import Fore, Style, init
 from tabulate import tabulate
 
@@ -38,21 +37,42 @@ init(autoreset=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATA FETCHER
+# DATA FETCHER — Fyers API (primary) + Yahoo Finance (fallback)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_data(symbol: str, period: str = "1y", interval: str = "1d") -> Optional[pd.DataFrame]:
-    """Fetch historical data for an Indian stock from Yahoo Finance."""
-    for suffix in [".NS", ".BO"]:
-        try:
-            ticker = yf.Ticker(f"{symbol}{suffix}")
-            df = ticker.history(period=period, interval=interval)
-            if df is not None and not df.empty and len(df) >= 30:
-                if df.index.tz is not None:
-                    df.index = df.index.tz_localize(None)
-                return df
-        except Exception:
-            continue
+    """
+    Fetch historical data for an Indian stock.
+    Tries Fyers API first (supports 1m/5m/15m/1h/1d), falls back to Yahoo.
+    """
+    # Try Fyers first
+    try:
+        from fyers_data import fetch_data as fyers_fetch
+        df = fyers_fetch(symbol, period=period, interval=interval)
+        if df is not None and len(df) >= 30:
+            # Convert to standard format with capitalized columns for strategies
+            df = df.set_index("date")
+            df.columns = [c.capitalize() for c in df.columns]
+            return df
+    except Exception:
+        pass
+
+    # Fallback to Yahoo Finance
+    try:
+        import yfinance as yf
+        for suffix in [".NS", ".BO"]:
+            try:
+                ticker = yf.Ticker(f"{symbol}{suffix}")
+                df = ticker.history(period=period, interval=interval)
+                if df is not None and not df.empty and len(df) >= 30:
+                    if df.index.tz is not None:
+                        df.index = df.index.tz_localize(None)
+                    return df
+            except Exception:
+                continue
+    except ImportError:
+        pass
+
     return None
 
 
