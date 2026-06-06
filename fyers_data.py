@@ -3,10 +3,12 @@ Fyers Data Module — Direct REST API (no SDK needed)
 =====================================================
 Fetches historical candle data from Fyers API v3 using plain HTTP requests.
 Supports 1min, 5min, 15min, 1hr, 1day candles for NSE/BSE stocks.
+Auto-authenticates using fyers_auth when token is missing.
 
 Usage:
-    from fyers_data import fetch_fyers_data
+    from fyers_data import fetch_fyers_data, fetch_data
     df = fetch_fyers_data("RELIANCE", interval="5", days=30)
+    df = fetch_data("RELIANCE", period="3mo", interval="5m")  # auto fallback to Yahoo
 """
 
 import json
@@ -91,15 +93,27 @@ def generate_token(auth_code):
 
 
 def load_token():
-    """Load cached access token if still valid."""
+    """Load cached access token. Auto-login if expired."""
     if not TOKEN_FILE.exists():
-        return None
+        # Try auto-login
+        try:
+            from fyers_auth import auto_login
+            auto_login()
+        except Exception:
+            pass
     try:
         data = json.loads(TOKEN_FILE.read_text(encoding="utf-8"))
         expires = datetime.fromisoformat(data["expires_at"])
         if datetime.now() < expires:
             return data["access_token"]
-        return None
+        # Token expired, try auto-login
+        try:
+            from fyers_auth import auto_login
+            auto_login()
+            data = json.loads(TOKEN_FILE.read_text(encoding="utf-8"))
+            return data["access_token"]
+        except Exception:
+            return None
     except Exception:
         return None
 
@@ -152,8 +166,8 @@ def fetch_fyers_data(stock, interval="1d", days=365, exchange="NSE"):
         "symbol": symbol,
         "resolution": resolution,
         "date_format": "1",
-        "range_from": str(int(from_date.timestamp())),
-        "range_to": str(int(to_date.timestamp())),
+        "range_from": from_date.strftime("%Y-%m-%d"),
+        "range_to": to_date.strftime("%Y-%m-%d"),
         "cont_flag": "1",
     }
 
