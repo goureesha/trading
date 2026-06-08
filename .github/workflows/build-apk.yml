@@ -7,6 +7,9 @@ on:
       - 'android/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,6 +40,7 @@ jobs:
         
     - name: Create Release
       if: github.ref == 'refs/heads/master'
+      continue-on-error: true
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
@@ -45,3 +49,4 @@ jobs:
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
