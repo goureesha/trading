@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: orb-scanner
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: FYERS_CLIENT_ID
+        value: 70OO9494R9-100
+      - key: FYERS_SECRET
+        value: JCIFHZQKBA
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TZ
+        value: Asia/Kolkata

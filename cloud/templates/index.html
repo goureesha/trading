@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ORB Scanner Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#0a0e17;color:#e2e8f0;min-height:100vh;-webkit-tap-highlight-color:transparent}
+
+.header{background:linear-gradient(135deg,#111827,#1a1f35);border-bottom:1px solid rgba(59,130,246,.15);padding:16px 20px;position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+.logo{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;margin-bottom:8px}
+.logo-text{background:linear-gradient(135deg,#10b981,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.clock{font-size:13px;color:#94a3b8;font-variant-numeric:tabular-nums}
+.status{font-size:12px;padding:4px 12px;border-radius:20px;font-weight:600}
+.status.on{background:rgba(16,185,129,.15);color:#10b981;animation:pulse 2s infinite}
+.status.off{background:rgba(239,68,68,.15);color:#ef4444}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+.main{padding:16px;max-width:600px;margin:0 auto}
+
+/* Auth */
+.auth{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:1px solid rgba(59,130,246,.2);border-radius:16px;padding:20px;margin-bottom:16px}
+.auth h3{color:#3b82f6;font-size:16px;margin-bottom:8px}
+.auth p{font-size:13px;color:#94a3b8;margin-bottom:12px;line-height:1.5}
+.auth a{color:#3b82f6}
+.auth-input{width:100%;padding:12px 16px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(0,0,0,.3);color:#e2e8f0;font-size:14px;font-family:inherit;outline:none;margin-bottom:10px}
+.auth-input:focus{border-color:rgba(59,130,246,.5)}
+
+.btn{width:100%;padding:14px;border:none;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;transition:all .3s}
+.btn-blue{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;box-shadow:0 4px 16px rgba(59,130,246,.3)}
+.btn-green{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 4px 16px rgba(16,185,129,.3)}
+.btn-red{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;box-shadow:0 4px 16px rgba(239,68,68,.2)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.msg{padding:10px 14px;border-radius:10px;font-size:13px;margin-top:10px;display:none}
+.msg.ok{display:block;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.2)}
+.msg.err{display:block;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
+
+/* Summary */
+.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.s-card{background:rgba(17,24,39,.85);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:14px;position:relative;overflow:hidden}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
+.s-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1px}
+.s-val{font-size:24px;font-weight:700;color:var(--c);margin-top:2px}
+
+/* Signals */
+.sec-title{font-size:14px;font-weight:600;margin:16px 0 10px;display:flex;align-items:center;gap:6px}
+.sig{background:rgba(17,24,39,.85);border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:16px;margin-bottom:10px;transition:all .3s}
+.sig.buy{border-left:3px solid #10b981}
+.sig.sell{border-left:3px solid #ef4444}
+.sig-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.sig-sym{font-size:18px;font-weight:700}
+.badge{padding:4px 12px;border-radius:16px;font-size:11px;font-weight:700;text-transform:uppercase}
+.badge.buy{background:rgba(16,185,129,.15);color:#10b981}
+.badge.sell{background:rgba(239,68,68,.15);color:#ef4444}
+.sig-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.m{text-align:center}.m .ml{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+.m .mv{font-size:15px;font-weight:600;margin-top:2px}.m .mv.g{color:#10b981}.m .mv.r{color:#ef4444}
+.sig-foot{display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);font-size:13px}
+.pnl{font-weight:600}.pnl.pos{color:#10b981}.pnl.neg{color:#ef4444}
+
+.empty{text-align:center;padding:40px 20px;color:#475569}
+.empty .ei{font-size:48px;margin-bottom:12px}
+.empty .et{font-size:16px;font-weight:600;color:#94a3b8}
+
+.wait-chip{display:inline-block;padding:5px 12px;border-radius:8px;font-size:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.15);color:#f59e0b;margin:2px 4px}
+.filter-chip{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;background:rgba(139,92,246,.1);color:#8b5cf6;margin:2px}
+
+.scan-info{text-align:center;padding:10px;font-size:12px;color:#475569;margin-top:16px}
+
+/* Bottom bar */
+.bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(17,24,39,.95);border-top:1px solid rgba(255,255,255,.05);padding:10px 20px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#64748b;z-index:50;backdrop-filter:blur(12px)}
+body{padding-bottom:50px}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0a0e17}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:2px}
+</style>
+</head>
+<body>
+
+<header class="header">
+<div class="logo">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#g1)" stroke-width="2.5"><defs><linearGradient id="g1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+<span class="logo-text">ORB Scanner Pro</span>
+</div>
+<div class="header-row">
+<span class="clock" id="clock"></span>
+<span class="status off" id="scanStatus">⏹ Not Scanning</span>
+</div>
+</header>
+
+<div class="main">
+
+<!-- Auth -->
+<div class="auth" id="authBox">
+<h3>🔐 Fyers Login</h3>
+<p>1. <a href="#" id="authLink" target="_blank">Click here to login to Fyers</a></p>
+<p>2. After login, paste the redirect URL below:</p>
+<input class="auth-input" id="authInput" placeholder="Paste https://127.0.0.1/?auth_code=... URL">
+<button class="btn btn-blue" id="loginBtn" onclick="doLogin()">🔑 Login</button>
+<div class="msg" id="authMsg"></div>
+</div>
+
+<!-- Start/Stop -->
+<div id="controlBox" style="display:none;margin-bottom:16px">
+<button class="btn btn-green" id="startBtn" onclick="startScan()">🚀 Start Scanner</button>
+<div style="margin-top:8px;text-align:center">
+<span class="filter-chip">✅ VWAP Filter</span>
+<span class="filter-chip">✅ Volume Filter</span>
+<span class="filter-chip">✅ Time &lt;12PM</span>
+</div>
+</div>
+
+<!-- Summary -->
+<div class="summary" id="summaryBox" style="display:none">
+<div class="s-card" style="--c:#10b981"><div class="s-label">Buy</div><div class="s-val" id="vBuy">0</div></div>
+<div class="s-card" style="--c:#ef4444"><div class="s-label">Sell</div><div class="s-val" id="vSell">0</div></div>
+<div class="s-card" style="--c:#3b82f6"><div class="s-label">Active</div><div class="s-val" id="vActive">0</div></div>
+<div class="s-card" style="--c:#f59e0b"><div class="s-label">Daily P&L</div><div class="s-val" id="vPnl">0%</div></div>
+</div>
+
+<!-- Signals -->
+<div id="signalBox">
+<div class="empty"><div class="ei">📡</div><div class="et">Login & Start to scan</div></div>
+</div>
+
+<!-- Wait -->
+<div id="waitBox" style="display:none"></div>
+
+<div class="scan-info" id="scanInfo"></div>
+</div>
+
+<div class="bottom">
+<span>Last: <span id="lastScan">Never</span></span>
+<span>Scans: <span id="scanCount">0</span></span>
+</div>
+
+<script>
+const API = '';  // same origin
+
+// Clock
+setInterval(()=>{
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN',{hour12:false});
+},1000);
+
+// Get auth URL
+fetch(API+'/api/auth-url').then(r=>r.json()).then(d=>{
+    document.getElementById('authLink').href = d.url;
+});
+
+// Login
+async function doLogin(){
+    const url = document.getElementById('authInput').value.trim();
+    const msg = document.getElementById('authMsg');
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = '⏳ Logging in...';
+
+    try{
+        const resp = await fetch(API+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+        const data = await resp.json();
+        if(data.ok){
+            msg.className='msg ok'; msg.textContent='✅ '+data.message;
+            document.getElementById('authBox').style.display='none';
+            document.getElementById('controlBox').style.display='block';
+        }else{
+            msg.className='msg err'; msg.textContent='❌ '+data.error;
+            btn.disabled=false; btn.textContent='🔑 Login';
+        }
+    }catch(e){
+        msg.className='msg err'; msg.textContent='❌ Network error';
+        btn.disabled=false; btn.textContent='🔑 Login';
+    }
+}
+
+// Start scan
+async function startScan(){
+    const btn = document.getElementById('startBtn');
+    btn.disabled = true;
+    try{
+        const resp = await fetch(API+'/api/start',{method:'POST'});
+        const data = await resp.json();
+        if(data.ok){
+            btn.className='btn btn-red';
+            btn.textContent='⏹ Stop Scanner';
+            btn.onclick = stopScan;
+            btn.disabled = false;
+            document.getElementById('scanStatus').className='status on';
+            document.getElementById('scanStatus').textContent='🟢 Scanning';
+            document.getElementById('summaryBox').style.display='grid';
+            startPolling();
+        }else{
+            alert(data.error);
+            btn.disabled = false;
+        }
+    }catch(e){alert('Network error');btn.disabled=false}
+}
+
+async function stopScan(){
+    await fetch(API+'/api/stop',{method:'POST'});
+    const btn = document.getElementById('startBtn');
+    btn.className='btn btn-green'; btn.textContent='🚀 Start Scanner'; btn.onclick=startScan;
+    document.getElementById('scanStatus').className='status off';
+    document.getElementById('scanStatus').textContent='⏹ Stopped';
+}
+
+// Poll status
+let pollTimer = null;
+function startPolling(){
+    pollTimer = setInterval(fetchStatus, 15000);
+    fetchStatus();
+}
+
+async function fetchStatus(){
+    try{
+        const resp = await fetch(API+'/api/status');
+        const data = await resp.json();
+        if(!data.ok) return;
+
+        document.getElementById('lastScan').textContent = data.last_scan || 'Waiting...';
+        document.getElementById('scanCount').textContent = data.scan_count;
+
+        if(!data.scanning){
+            clearInterval(pollTimer);
+            document.getElementById('scanStatus').className='status off';
+            document.getElementById('scanStatus').textContent='⏹ Market Closed';
+        }
+
+        renderResults(data.results, data.daily_pnl);
+    }catch(e){}
+}
+
+function renderResults(results, dailyPnl){
+    if(!results || !results.length){
+        document.getElementById('signalBox').innerHTML='<div class="empty"><div class="ei">⏳</div><div class="et">Scanning...</div></div>';
+        return;
+    }
+
+    const sigs = results.filter(r=>r.status==='SIGNAL');
+    const wait = results.filter(r=>r.status==='NO_BREAKOUT'||r.status==='WAITING');
+    const filtered = results.filter(r=>r.status==='FILTERED');
+    const buys = sigs.filter(s=>s.signal==='BUY');
+    const sells = sigs.filter(s=>s.signal==='SELL');
+    const active = sigs.filter(s=>s.trade_status&&s.trade_status.includes('ACTIVE'));
+
+    document.getElementById('vBuy').textContent = buys.length;
+    document.getElementById('vSell').textContent = sells.length;
+    document.getElementById('vActive').textContent = active.length;
+    document.getElementById('vPnl').textContent = (dailyPnl>=0?'+':'')+dailyPnl.toFixed(2)+'%';
+    document.getElementById('vPnl').style.color = dailyPnl>=0?'#10b981':'#ef4444';
+
+    const box = document.getElementById('signalBox');
+    if(!sigs.length){
+        box.innerHTML='<div class="empty"><div class="ei">😴</div><div class="et">No breakouts yet</div></div>';
+    }else{
+        box.innerHTML = sigs.map(s=>{
+            const b = s.signal==='BUY';
+            const pc = s.current_pnl>=0?'pos':'neg';
+            return `<div class="sig ${b?'buy':'sell'}">
+                <div class="sig-head"><span class="sig-sym">${s.symbol}</span><span class="badge ${b?'buy':'sell'}">${s.signal}</span></div>
+                <div class="sig-grid">
+                    <div class="m"><div class="ml">Entry</div><div class="mv">₹${s.entry.toFixed(1)}</div></div>
+                    <div class="m"><div class="ml">SL</div><div class="mv r">₹${s.sl.toFixed(1)}</div></div>
+                    <div class="m"><div class="ml">Target</div><div class="mv g">₹${s.target.toFixed(1)}</div></div>
+                </div>
+                <div class="sig-grid">
+                    <div class="m"><div class="ml">R:R</div><div class="mv">${s.rr.toFixed(1)}x</div></div>
+                    <div class="m"><div class="ml">Time</div><div class="mv">${s.breakout_time}</div></div>
+                    <div class="m"><div class="ml">Range</div><div class="mv">₹${s.orb_range.toFixed(0)}</div></div>
+                </div>
+                <div class="sig-foot"><span class="pnl ${pc}">${s.current_pnl>=0?'+':''}${s.current_pnl.toFixed(2)}%</span><span style="color:#64748b">${s.trade_status}</span></div>
+            </div>`}).join('');
+    }
+
+    // Waiting
+    const wb = document.getElementById('waitBox');
+    if(wait.length){
+        wb.style.display='block';
+        wb.innerHTML = '<div class="sec-title">⏳ No Breakout</div>'+wait.map(w=>`<span class="wait-chip">${w.symbol} ${w.ltp?'₹'+w.ltp.toFixed(0):''}</span>`).join('');
+    }else wb.style.display='none';
+
+    // Filtered
+    if(filtered.length){
+        document.getElementById('scanInfo').innerHTML = '🚫 Filtered: '+filtered.map(f=>`<span class="filter-chip">${f.symbol} (${f.reason})</span>`).join('');
+    }
+}
+
+// Check if already logged in
+fetch(API+'/api/status').then(r=>r.json()).then(d=>{
+    if(d.logged_in){
+        document.getElementById('authBox').style.display='none';
+        document.getElementById('controlBox').style.display='block';
+        if(d.scanning){
+            document.getElementById('scanStatus').className='status on';
+            document.getElementById('scanStatus').textContent='🟢 Scanning';
+            document.getElementById('summaryBox').style.display='grid';
+            const btn=document.getElementById('startBtn');
+            btn.className='btn btn-red'; btn.textContent='⏹ Stop Scanner'; btn.onclick=stopScan;
+            startPolling();
+        }
+    }
+}).catch(()=>{});
+</script>
+</body>
+</html>
