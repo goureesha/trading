@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORB Scanner Pro - Live Trading Signals</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#0a0e17;color:#e2e8f0;min-height:100vh;padding-bottom:60px}
+
+.header{background:linear-gradient(135deg,#111827,#1a1f35);border-bottom:1px solid rgba(59,130,246,.15);padding:14px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;backdrop-filter:blur(12px)}
+.logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800}
+.logo-text{background:linear-gradient(135deg,#10b981,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.clock{font-size:13px;color:#94a3b8;font-weight:500;font-variant-numeric:tabular-nums}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.status-dot.live{background:#10b981;animation:pulse 2s infinite}
+.status-dot.off{background:#ef4444}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.scan-btn{padding:8px 20px;border:none;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:600;font-size:13px;cursor:pointer;transition:all .3s;box-shadow:0 0 16px rgba(16,185,129,.25);font-family:inherit}
+.scan-btn:hover{transform:translateY(-2px);box-shadow:0 0 28px rgba(16,185,129,.45)}
+.scan-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.scan-btn.scanning{animation:btnPulse 1.5s infinite}
+@keyframes btnPulse{0%,100%{box-shadow:0 0 16px rgba(16,185,129,.25)}50%{box-shadow:0 0 36px rgba(16,185,129,.55)}}
+
+.main{max-width:1320px;margin:0 auto;padding:20px}
+
+/* Auth Box */
+.auth-box{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:1px solid rgba(59,130,246,.2);border-radius:14px;padding:20px;margin-bottom:20px}
+.auth-box h3{color:#3b82f6;font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.auth-box p{font-size:13px;color:#94a3b8;margin-bottom:12px}
+.auth-box a{color:#3b82f6;text-decoration:none}
+.auth-box a:hover{text-decoration:underline}
+.auth-row{display:flex;gap:10px}
+.auth-input{flex:1;padding:10px 14px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(0,0,0,.3);color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;transition:border .3s}
+.auth-input:focus{border-color:rgba(59,130,246,.5)}
+.auth-btn{padding:10px 20px;border:none;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;transition:all .3s}
+.auth-btn:hover{background:#2563eb}
+.auth-status{margin-top:10px;font-size:13px;padding:8px 14px;border-radius:8px;display:none}
+.auth-status.ok{display:block;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.2)}
+.auth-status.err{display:block;background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
+
+/* Summary */
+.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+.s-card{background:rgba(17,24,39,.85);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:16px;position:relative;overflow:hidden;transition:transform .3s,box-shadow .3s}
+.s-card:hover{transform:translateY(-3px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c)}
+.s-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.s-val{font-size:26px;font-weight:700;color:var(--c)}
+.s-sub{font-size:11px;color:#475569;margin-top:2px}
+
+/* Options */
+.opt-banner{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:none}
+.opt-banner h3{color:#3b82f6;font-size:15px;margin-bottom:10px}
+.opt-trade{display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(0,0,0,.2);border-radius:8px;margin-bottom:6px;font-size:13px;flex-wrap:wrap}
+.opt-dir{font-weight:700;padding:3px 10px;border-radius:6px;font-size:12px}
+.opt-dir.ce{background:rgba(16,185,129,.2);color:#10b981}
+.opt-dir.pe{background:rgba(239,68,68,.2);color:#ef4444}
+
+/* Signal cards */
+.sec-title{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.signal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:20px}
+.sig{background:rgba(17,24,39,.85);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:16px;transition:all .3s}
+.sig:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.sig.buy{border-left:3px solid #10b981}
+.sig.sell{border-left:3px solid #ef4444}
+.sig-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.sig-sym{font-size:17px;font-weight:700}
+.badge{padding:3px 11px;border-radius:16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.badge.buy{background:rgba(16,185,129,.15);color:#10b981;box-shadow:0 0 10px rgba(16,185,129,.15)}
+.badge.sell{background:rgba(239,68,68,.15);color:#ef4444;box-shadow:0 0 10px rgba(239,68,68,.15)}
+.sig-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.m{text-align:center}.m .ml{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+.m .mv{font-size:14px;font-weight:600;margin-top:1px}.m .mv.g{color:#10b981}.m .mv.r{color:#ef4444}
+.sig-foot{display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);font-size:13px}
+.pnl{font-weight:600}.pnl.pos{color:#10b981}.pnl.neg{color:#ef4444}
+
+/* Waiting */
+.wait-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.wait-chip{padding:5px 12px;border-radius:8px;font-size:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.15);color:#f59e0b}
+
+/* Plan */
+.plan{background:rgba(17,24,39,.85);border:1px solid rgba(16,185,129,.15);border-radius:12px;padding:18px;margin-bottom:20px;display:none}
+.plan h3{color:#10b981;font-size:15px;margin-bottom:12px}
+.plan table{width:100%;border-collapse:collapse}
+.plan th{text-align:left;padding:6px 10px;color:#64748b;font-size:11px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.05)}
+.plan td{padding:8px 10px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.02)}
+.plan .tot{font-weight:700;color:#10b981}
+
+/* Progress */
+.prog-wrap{display:none;margin-bottom:20px}
+.prog-bar{height:4px;background:#1e293b;border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);border-radius:2px;transition:width .3s;width:0%}
+.prog-text{font-size:12px;color:#64748b;margin-top:6px;text-align:center}
+
+.empty{text-align:center;padding:50px 20px;color:#475569}
+.empty .ei{font-size:44px;margin-bottom:12px}
+.empty .et{font-size:16px;font-weight:600;color:#94a3b8;margin-bottom:6px}
+
+.rbar{position:fixed;bottom:0;left:0;right:0;background:rgba(17,24,39,.95);border-top:1px solid rgba(255,255,255,.05);padding:8px 24px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#64748b;z-index:50}
+.atog{display:flex;align-items:center;gap:8px;cursor:pointer}
+.tsw{width:34px;height:18px;background:#334155;border-radius:9px;position:relative;transition:background .3s;cursor:pointer}
+.tsw.on{background:#10b981}
+.tsw::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:2px;left:2px;transition:transform .3s}
+.tsw.on::after{transform:translateX(16px)}
+
+@media(max-width:768px){.summary{grid-template-columns:repeat(2,1fr)}.signal-grid{grid-template-columns:1fr}.header{padding:10px 14px;flex-wrap:wrap;gap:8px}.main{padding:14px}}
+@media(max-width:480px){.summary{grid-template-columns:1fr 1fr}.s-val{font-size:22px}}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0a0e17}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:3px}
+</style>
+</head>
+<body>
+
+<header class="header">
+<div class="logo">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#g1)" stroke-width="2.5"><defs><linearGradient id="g1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+<span class="logo-text">ORB Scanner Pro</span>
+</div>
+<div class="header-right">
+<span class="clock" id="clock"></span>
+<span id="mstat"><span class="status-dot live"></span>Market Open</span>
+<button class="scan-btn" id="scanBtn" onclick="startScan()" disabled>⚡ Login First</button>
+</div>
+</header>
+
+<div class="main">
+
+<!-- Auth -->
+<div class="auth-box" id="authBox">
+<h3>🔐 Fyers Login</h3>
+<p>1. <a href="https://api-t1.fyers.in/api/v3/generate-authcode?client_id=70OO9494R9-100&redirect_uri=https://127.0.0.1&response_type=code&state=tradesignalpro" target="_blank">Click here to login to Fyers</a></p>
+<p>2. After login, paste the full redirect URL below:</p>
+<div class="auth-row">
+<input class="auth-input" id="authInput" placeholder="Paste https://127.0.0.1/?s=ok&code=200&auth_code=... URL here">
+<button class="auth-btn" onclick="doAuth()">Login</button>
+</div>
+<div class="auth-status" id="authStatus"></div>
+</div>
+
+<!-- Summary -->
+<div class="summary">
+<div class="s-card" style="--c:#3b82f6"><div class="s-label">Scanned</div><div class="s-val" id="v_total">0</div><div class="s-sub">Stocks + Index</div></div>
+<div class="s-card" style="--c:#10b981"><div class="s-label">Buy Signals</div><div class="s-val" id="v_buy">0</div><div class="s-sub">Bullish ORB</div></div>
+<div class="s-card" style="--c:#ef4444"><div class="s-label">Sell Signals</div><div class="s-val" id="v_sell">0</div><div class="s-sub">Bearish ORB</div></div>
+<div class="s-card" style="--c:#f59e0b"><div class="s-label">Active</div><div class="s-val" id="v_active">0</div><div class="s-sub">Running</div></div>
+<div class="s-card" style="--c:#8b5cf6"><div class="s-label">Target Hit</div><div class="s-val" id="v_target">0</div><div class="s-sub">Profit ✅</div></div>
+</div>
+
+<div class="prog-wrap" id="progWrap"><div class="prog-bar"><div class="prog-fill" id="progFill"></div></div><div class="prog-text" id="progText"></div></div>
+<div class="opt-banner" id="optBanner"></div>
+<div class="sec-title">📡 Live ORB Signals</div>
+<div class="signal-grid" id="sigGrid">
+<div class="empty"><div class="ei">🔐</div><div class="et">Login to Fyers first</div><div>Paste your redirect URL above to start scanning</div></div>
+</div>
+<div id="waitSec" style="display:none"><div class="sec-title">⏳ No Breakout Yet</div><div class="wait-row" id="waitRow"></div></div>
+<div class="plan" id="planBox"></div>
+</div>
+
+<div class="rbar">
+<div>Last: <span id="lastUp">Never</span></div>
+<div class="atog" onclick="toggleAuto()"><span>Auto-refresh 60s</span><div class="tsw" id="aToggle"></div></div>
+</div>
+
+<script>
+// ── CONFIG ──
+const CLIENT_ID = '70OO9494R9-100';
+const SECRET = 'JCIFHZQKBA';
+const REDIRECT = 'https://127.0.0.1';
+const FYERS_TOKEN_URL = 'https://api-t1.fyers.in/api/v3/validate-authcode';
+const FYERS_HISTORY_URL = 'https://api-t1.fyers.in/data/history';
+const PROXY = url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+
+const SYMBOLS = [
+    {fyers:'NSE:NIFTY50-INDEX', name:'NIFTY50', type:'index'},
+    {fyers:'NSE:NIFTYBANK-INDEX', name:'BANKNIFTY', type:'index'},
+    {fyers:'NSE:RELIANCE-EQ', name:'RELIANCE', type:'stock'},
+    {fyers:'NSE:INFY-EQ', name:'INFY', type:'stock'},
+    {fyers:'NSE:HDFCBANK-EQ', name:'HDFCBANK', type:'stock'},
+    {fyers:'NSE:SBIN-EQ', name:'SBIN', type:'stock'},
+    {fyers:'NSE:ICICIBANK-EQ', name:'ICICIBANK', type:'stock'},
+    {fyers:'NSE:AXISBANK-EQ', name:'AXISBANK', type:'stock'},
+    {fyers:'NSE:ITC-EQ', name:'ITC', type:'stock'},
+    {fyers:'NSE:TCS-EQ', name:'TCS', type:'stock'},
+    {fyers:'NSE:BAJFINANCE-EQ', name:'BAJFINANCE', type:'stock'},
+    {fyers:'NSE:TATASTEEL-EQ', name:'TATASTEEL', type:'stock'},
+];
+
+const ORB_CANDLES = 3;
+const RR = 2.0;
+let accessToken = localStorage.getItem('fyers_token') || '';
+let scanning = false;
+
+// ── CLOCK ──
+function updateClock(){
+    const n=new Date();
+    document.getElementById('clock').textContent=n.toLocaleTimeString('en-IN',{hour12:false});
+    const h=n.getHours();
+    document.getElementById('mstat').innerHTML=(h>=9&&h<16)?'<span class="status-dot live"></span>Market Open':'<span class="status-dot off"></span>Market Closed';
+}
+setInterval(updateClock,1000);updateClock();
+
+// ── AUTH ──
+async function doAuth(){
+    const url = document.getElementById('authInput').value.trim();
+    const st = document.getElementById('authStatus');
+
+    // Extract auth_code from URL
+    let authCode = '';
+    try{
+        const u = new URL(url);
+        authCode = u.searchParams.get('auth_code');
+    }catch(e){
+        // Maybe they pasted just the code
+        authCode = url;
+    }
+
+    if(!authCode){
+        st.className='auth-status err';st.textContent='❌ Invalid URL. Paste the full redirect URL.';return;
+    }
+
+    st.className='auth-status';st.style.display='block';st.style.background='rgba(59,130,246,.1)';st.style.color='#3b82f6';st.style.border='1px solid rgba(59,130,246,.2)';
+    st.textContent='⏳ Generating token...';
+
+    try{
+        const body = {
+            grant_type: 'authorization_code',
+            appIdHash: await sha256(CLIENT_ID + ':' + SECRET),
+            code: authCode,
+        };
+
+        const resp = await fetch(PROXY(FYERS_TOKEN_URL), {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+
+        if(data.s === 'ok' && data.access_token){
+            accessToken = data.access_token;
+            localStorage.setItem('fyers_token', accessToken);
+            st.className='auth-status ok';
+            st.textContent='✅ Login successful! Token saved. You can now scan.';
+            document.getElementById('scanBtn').disabled=false;
+            document.getElementById('scanBtn').textContent='⚡ Scan Now';
+            document.getElementById('authBox').style.display='none';
+        }else{
+            st.className='auth-status err';
+            st.textContent='❌ Login failed: '+(data.message||JSON.stringify(data));
+        }
+    }catch(e){
+        st.className='auth-status err';
+        st.textContent='❌ Error: '+e.message;
+    }
+}
+
+async function sha256(msg){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Check saved token on load
+if(accessToken){
+    document.getElementById('scanBtn').disabled=false;
+    document.getElementById('scanBtn').textContent='⚡ Scan Now';
+    document.getElementById('authBox').innerHTML=`
+        <h3>🔐 Fyers Login</h3>
+        <div class="auth-status ok" style="display:block">✅ Token loaded from last session. <a href="#" onclick="logout()" style="color:#ef4444">Logout</a></div>
+    `;
+}
+
+function logout(){
+    localStorage.removeItem('fyers_token');
+    accessToken='';
+    location.reload();
+}
+
+// ── FETCH DATA ──
+async function fetchFyers5m(symbol){
+    const now = new Date();
+    const from = new Date(now - 5*24*60*60*1000);
+    const fromStr = from.toISOString().slice(0,10);
+    const toStr = now.toISOString().slice(0,10);
+
+    const url = `${FYERS_HISTORY_URL}?symbol=${symbol}&resolution=5&date_format=1&range_from=${fromStr}&range_to=${toStr}&cont_flag=1`;
+    const authHeader = `${CLIENT_ID}:${accessToken}`;
+
+    // Direct call (works in Android WebView - no CORS!)
+    try{
+        const resp = await fetch(url, {
+            headers: {'Authorization': authHeader},
+            signal: AbortSignal.timeout(10000)
+        });
+        const data = await resp.json();
+        if(data.s==='ok' && data.candles && data.candles.length>0) return parseCandles(data.candles);
+    }catch(e){}
+
+    return null;
+}
+
+function parseCandles(candles){
+    return candles.map(c=>{
+        const d=new Date(c[0]*1000);
+        return {date:d, open:c[1], high:c[2], low:c[3], close:c[4], vol:c[5],
+            time:d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'),
+            dayKey:d.toISOString().slice(0,10)};
+    });
+}
+
+// ── ORB DETECTION ──
+function detectORB(candles, name){
+    if(!candles||candles.length<10) return null;
+    const days=[...new Set(candles.map(c=>c.dayKey))].sort();
+    const today=days[days.length-1];
+    const todayC=candles.filter(c=>c.dayKey===today);
+    if(todayC.length<ORB_CANDLES+1) return {symbol:name,status:'WAITING',message:'ORB forming...'};
+
+    const orb=todayC.slice(0,ORB_CANDLES);
+    const orbH=Math.max(...orb.map(c=>c.high));
+    const orbL=Math.min(...orb.map(c=>c.low));
+    const orbR=orbH-orbL;
+    if(orbR<=0) return null;
+
+    const post=todayC.slice(ORB_CANDLES);
+    if(!post.length) return {symbol:name,status:'WAITING',orb_high:orbH,orb_low:orbL,orb_range:orbR};
+
+    let signal=null,bCandle=null;
+    for(const c of post){
+        if(c.close>orbH){signal='BUY';bCandle=c;break}
+        if(c.close<orbL){signal='SELL';bCandle=c;break}
+    }
+
+    if(!signal){
+        const last=todayC[todayC.length-1];
+        return {symbol:name,status:'NO_BREAKOUT',orb_high:orbH,orb_low:orbL,orb_range:orbR,
+            ltp:last.close,dist_high_pct:((orbH-last.close)/last.close)*100,dist_low_pct:((last.close-orbL)/last.close)*100};
+    }
+
+    const entry=bCandle.close;
+    let sl,target;
+    if(signal==='BUY'){sl=orbL;target=entry+(entry-sl)*RR}
+    else{sl=orbH;target=entry-(sl-entry)*RR}
+    const risk=Math.abs(entry-sl),rr=Math.abs(target-entry)/risk;
+
+    const last=todayC[todayC.length-1],cur=last.close;
+    let tradeStatus,pnl;
+    if(signal==='BUY'){
+        if(cur<=sl){tradeStatus='SL HIT ❌';pnl=((sl-entry)/entry)*100}
+        else if(cur>=target){tradeStatus='TARGET HIT ✅';pnl=((target-entry)/entry)*100}
+        else{tradeStatus='ACTIVE 🟢';pnl=((cur-entry)/entry)*100}
+    }else{
+        if(cur>=sl){tradeStatus='SL HIT ❌';pnl=((entry-sl)/entry)*100}
+        else if(cur<=target){tradeStatus='TARGET HIT ✅';pnl=((entry-target)/entry)*100}
+        else{tradeStatus='ACTIVE 🟢';pnl=((entry-cur)/entry)*100}
+    }
+
+    return {symbol:name,status:'SIGNAL',signal,entry,sl,target,risk,rr,
+        breakout_time:bCandle.time,orb_high:orbH,orb_low:orbL,orb_range:orbR,
+        current_price:cur,current_pnl:pnl,trade_status:tradeStatus};
+}
+
+// ── SCAN ──
+async function startScan(){
+    if(scanning||!accessToken) return;
+    scanning=true;
+    const btn=document.getElementById('scanBtn');
+    btn.disabled=true;btn.classList.add('scanning');btn.textContent='⚡ Scanning...';
+    const pw=document.getElementById('progWrap');pw.style.display='block';
+
+    const results=[];
+    for(let i=0;i<SYMBOLS.length;i++){
+        const s=SYMBOLS[i];
+        document.getElementById('progText').textContent=`Scanning ${s.name} (${i+1}/${SYMBOLS.length})...`;
+        document.getElementById('progFill').style.width=((i+1)/SYMBOLS.length*100)+'%';
+        try{
+            const candles=await fetchFyers5m(s.fyers);
+            const r=detectORB(candles,s.name);
+            if(r){r.type=s.type;results.push(r)}
+        }catch(e){}
+        await new Promise(r=>setTimeout(r,300));
+    }
+
+    pw.style.display='none';
+    btn.disabled=false;btn.classList.remove('scanning');btn.textContent='⚡ Scan Now';
+    scanning=false;
+    renderResults(results);
+    document.getElementById('lastUp').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false});
+}
+
+// ── RENDER ──
+function renderResults(results){
+    const sigs=results.filter(r=>r.status==='SIGNAL');
+    const wait=results.filter(r=>r.status==='NO_BREAKOUT'||r.status==='WAITING');
+    const buys=sigs.filter(s=>s.signal==='BUY');
+    const sells=sigs.filter(s=>s.signal==='SELL');
+    const active=sigs.filter(s=>s.trade_status&&s.trade_status.includes('ACTIVE'));
+    const targets=sigs.filter(s=>s.trade_status&&s.trade_status.includes('TARGET'));
+
+    document.getElementById('v_total').textContent=results.length;
+    document.getElementById('v_buy').textContent=buys.length;
+    document.getElementById('v_sell').textContent=sells.length;
+    document.getElementById('v_active').textContent=active.length;
+    document.getElementById('v_target').textContent=targets.length;
+
+    const grid=document.getElementById('sigGrid');
+    if(!sigs.length){
+        grid.innerHTML='<div class="empty"><div class="ei">😴</div><div class="et">No ORB breakouts detected</div><div>Price still within opening range</div></div>';
+    }else{
+        grid.innerHTML=sigs.map(s=>{
+            const b=s.signal==='BUY';
+            const pc=s.current_pnl>=0?'pos':'neg';
+            const si=s.trade_status.includes('ACTIVE')?'🟢':s.trade_status.includes('TARGET')?'🎯':'🛑';
+            return `<div class="sig ${b?'buy':'sell'}">
+                <div class="sig-head"><span class="sig-sym">${s.symbol}</span><span class="badge ${b?'buy':'sell'}">${s.signal}</span></div>
+                <div class="sig-metrics">
+                    <div class="m"><div class="ml">Entry</div><div class="mv">₹${s.entry.toFixed(2)}</div></div>
+                    <div class="m"><div class="ml">Stop Loss</div><div class="mv r">₹${s.sl.toFixed(2)}</div></div>
+                    <div class="m"><div class="ml">Target</div><div class="mv g">₹${s.target.toFixed(2)}</div></div>
+                </div>
+                <div class="sig-metrics">
+                    <div class="m"><div class="ml">R:R</div><div class="mv">${s.rr.toFixed(1)}x</div></div>
+                    <div class="m"><div class="ml">Breakout</div><div class="mv">${s.breakout_time}</div></div>
+                    <div class="m"><div class="ml">ORB Range</div><div class="mv">₹${s.orb_range.toFixed(1)}</div></div>
+                </div>
+                <div class="sig-foot"><span class="pnl ${pc}">${s.current_pnl>=0?'+':''}${s.current_pnl.toFixed(2)}%</span><span style="color:#64748b;font-size:12px">${si} ${s.trade_status}</span></div>
+            </div>`}).join('');
+    }
+
+    // Options
+    const nS=sigs.filter(s=>s.type==='index');
+    const ob=document.getElementById('optBanner');
+    if(nS.length){
+        ob.style.display='block';
+        ob.innerHTML='<h3>💰 Nifty Options Trades</h3>'+nS.map(s=>{
+            const ot=s.signal==='BUY'?'CE':'PE';
+            const strike=Math.round(s.entry/50)*50;
+            return `<div class="opt-trade"><span class="opt-dir ${ot.toLowerCase()}">${ot}</span>
+                BUY ${s.symbol} ${strike} ${ot} @ ~₹200
+                <span style="margin-left:auto;color:#64748b;font-size:12px">SL: ${s.sl.toFixed(0)} | TGT: ${s.target.toFixed(0)}</span></div>`}).join('');
+    }else ob.style.display='none';
+
+    // Wait
+    const ws=document.getElementById('waitSec'),wr=document.getElementById('waitRow');
+    if(wait.length){
+        ws.style.display='block';
+        wr.innerHTML=wait.map(w=>`<div class="wait-chip">${w.symbol} ${w.ltp?'₹'+w.ltp.toFixed(1):''}</div>`).join('');
+    }else ws.style.display='none';
+
+    // Plan
+    const ab=active.filter(s=>s.signal==='BUY'&&s.type==='stock');
+    const pb=document.getElementById('planBox');
+    if(ab.length){
+        let tot=0;
+        const rows=ab.slice(0,5).map(s=>{
+            const q=Math.floor(25000/s.entry),c=q*s.entry;tot+=c;
+            return `<tr><td><b>${s.symbol}</b></td><td>${q}</td><td>₹${s.entry.toFixed(2)}</td>
+                <td>₹${Math.round(c).toLocaleString('en-IN')}</td>
+                <td style="color:#10b981">+₹${Math.round(q*(s.target-s.entry))}</td>
+                <td style="color:#ef4444">-₹${Math.round(q*Math.abs(s.entry-s.sl))}</td></tr>`}).join('');
+        pb.style.display='block';
+        pb.innerHTML=`<h3>📋 Investment Plan (₹25K/stock)</h3><table><thead><tr><th>Stock</th><th>Qty</th><th>Price</th><th>Cost</th><th>Profit</th><th>Risk</th></tr></thead>
+            <tbody>${rows}<tr><td colspan="3" class="tot">Total</td><td class="tot" colspan="3">₹${Math.round(tot).toLocaleString('en-IN')}</td></tr></tbody></table>`;
+    }else pb.style.display='none';
+}
+
+// Auto refresh
+let autoOn=false,autoInt=null;
+function toggleAuto(){
+    autoOn=!autoOn;
+    document.getElementById('aToggle').classList.toggle('on',autoOn);
+    if(autoOn) autoInt=setInterval(startScan,60000);
+    else if(autoInt) clearInterval(autoInt);
+}
+</script>
+</body>
+</html>
