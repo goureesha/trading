@@ -31,7 +31,7 @@ scanner = ORBScanner()
 
 # ── Config ──
 CLIENT_ID = os.environ.get('FYERS_CLIENT_ID', '70OO9494R9-100')
-SECRET = os.environ.get('FYERS_SECRET', 'JCIFHZQKBA')
+SECRET = os.environ.get('FYERS_SECRET', 'M4RUQHA4T0')
 REDIRECT = 'https://127.0.0.1'
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
