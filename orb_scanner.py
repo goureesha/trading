@@ -120,6 +120,10 @@ def detect_orb(df, symbol):
     for i in range(len(post_orb)):
         candle = post_orb.iloc[i]
 
+        # Time filter: skip afternoon signals (after 12:00 PM)
+        if candle["time"] >= "12:00":
+            break
+
         if candle["close"] > orb_high and signal is None:
             signal = "BUY"
             breakout_candle = candle
