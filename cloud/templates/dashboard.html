@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Trading Dashboard — P&L Reports</title>
+<meta name="description" content="Trading performance dashboard with profit & loss reports, equity curves, and trade analytics">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e17;--bg2:#111827;--bg3:#1a1f35;
+  --surface:rgba(17,24,39,.85);--surface2:rgba(17,24,39,.65);
+  --border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.1);
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --green:#10b981;--green2:#059669;--green-bg:rgba(16,185,129,.1);--green-border:rgba(16,185,129,.2);
+  --red:#ef4444;--red2:#dc2626;--red-bg:rgba(239,68,68,.1);--red-border:rgba(239,68,68,.2);
+  --blue:#3b82f6;--blue2:#2563eb;--blue-bg:rgba(59,130,246,.08);--blue-border:rgba(59,130,246,.2);
+  --purple:#8b5cf6;--amber:#f59e0b;--cyan:#06b6d4;
+  --radius:16px;--radius-sm:12px;--radius-xs:8px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+
+/* ── Navigation ── */
+.nav{background:linear-gradient(135deg,var(--bg2),var(--bg3));border-bottom:1px solid var(--border2);padding:0 24px;position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.nav-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-brand svg{flex-shrink:0}
+.nav-title{font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-links{display:flex;gap:4px}
+.nav-link{padding:8px 18px;border-radius:var(--radius-xs);font-size:13px;font-weight:600;color:var(--text3);text-decoration:none;transition:all .2s;position:relative}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.nav-link.active{color:var(--blue);background:var(--blue-bg)}
+.nav-link.active::after{content:'';position:absolute;bottom:-1px;left:20%;right:20%;height:2px;background:var(--blue);border-radius:2px}
+
+/* ── Main ── */
+.main{max-width:1400px;margin:0 auto;padding:24px 20px 80px}
+
+/* ── Page Header ── */
+.page-header{margin-bottom:28px}
+.page-header h1{font-size:28px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:12px}
+.page-header h1 .emoji{font-size:32px}
+.page-header p{color:var(--text3);font-size:14px}
+.header-meta{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}
+.meta-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--border)}
+.meta-chip .dot{width:6px;height:6px;border-radius:50%;animation:blink 2s infinite}
+.meta-chip .dot.green{background:var(--green)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Summary Cards ── */
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+@media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.summary-grid{grid-template-columns:1fr}}
+.s-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden;transition:all .3s;cursor:default}
+.s-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);border-radius:var(--radius) var(--radius) 0 0}
+.s-card .s-icon{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:12px}
+.s-card .s-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;font-weight:600}
+.s-card .s-value{font-size:28px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--accent)}
+.s-card .s-sub{font-size:12px;color:var(--text3);margin-top:4px;display:flex;align-items:center;gap:4px}
+.s-card .s-sub .arrow{font-size:14px}
+
+/* ── Charts Section ── */
+.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:28px}
+@media(max-width:900px){.charts-grid{grid-template-columns:1fr}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:all .3s}
+.chart-card:hover{border-color:var(--border2)}
+.chart-title{font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.chart-title .badge{font-size:11px;padding:4px 10px;border-radius:20px;font-weight:600}
+.chart-wrap{position:relative;height:280px}
+@media(max-width:600px){.chart-wrap{height:220px}}
+
+/* ── Stats Row ── */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
+@media(max-width:700px){.stats-grid{grid-template-columns:1fr}}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.stat-card h3{font-size:14px;font-weight:700;margin-bottom:16px;color:var(--text2)}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border-bottom:none}
+.stat-row .label{font-size:13px;color:var(--text3)}
+.stat-row .value{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat-row .value.green{color:var(--green)}
+.stat-row .value.red{color:var(--red)}
+
+/* ── Trades Table ── */
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:28px}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.table-header h3{font-size:16px;font-weight:700}
+.table-filters{display:flex;gap:8px;flex-wrap:wrap}
+.filter-btn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .2s;font-family:inherit}
+.filter-btn:hover,.filter-btn.active{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-border)}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead{background:rgba(0,0,0,.2)}
+th{padding:12px 16px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:600;white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}
+tr:hover td{background:rgba(255,255,255,.02)}
+tr:last-child td{border-bottom:none}
+.badge-dir{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase}
+.badge-dir.long{background:var(--green-bg);color:var(--green)}
+.badge-dir.short{background:var(--red-bg);color:var(--red)}
+.pnl-cell{font-weight:700}
+.pnl-cell.pos{color:var(--green)}
+.pnl-cell.neg{color:var(--red)}
+.reason-badge{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase}
+.reason-badge.target{background:var(--green-bg);color:var(--green)}
+.reason-badge.sl{background:var(--red-bg);color:var(--red)}
+.reason-badge.exit{background:var(--blue-bg);color:var(--blue)}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#2a3050}
+
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.animate-in{animation:fadeUp .5s ease forwards}
+.delay-1{animation-delay:.1s;opacity:0}
+.delay-2{animation-delay:.2s;opacity:0}
+.delay-3{animation-delay:.3s;opacity:0}
+.delay-4{animation-delay:.4s;opacity:0}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="url(#navGrad)" stroke-width="2.5">
+        <defs><linearGradient id="navGrad"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient></defs>
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      <span class="nav-title">ORB Scanner Pro</span>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link">📡 Scanner</a>
+      <a href="/dashboard" class="nav-link active">📊 Dashboard</a>
+    </div>
+  </div>
+</nav>
+
+<div class="main">
+  <!-- Page Header -->
+  <div class="page-header animate-in">
+    <h1><span class="emoji">📊</span> P&L Dashboard</h1>
+    <p>Complete trading performance analytics & trade reports</p>
+    <div class="header-meta">
+      <span class="meta-chip"><span class="dot green"></span> Live Portfolio</span>
+      <span class="meta-chip" id="metaStrategy">Strategy: —</span>
+      <span class="meta-chip" id="metaStarted">Started: —</span>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-grid">
+    <div class="s-card animate-in delay-1" style="--accent:var(--green)" id="pnlCard">
+      <div class="s-icon" style="background:var(--green-bg)">💰</div>
+      <div class="s-label">Total P&L</div>
+      <div class="s-value" id="totalPnl">₹0</div>
+      <div class="s-sub" id="totalPnlPct"><span class="arrow">—</span> 0% return</div>
+    </div>
+    <div class="s-card animate-in delay-2" style="--accent:var(--blue)">
+      <div class="s-icon" style="background:var(--blue-bg)">🎯</div>
+      <div class="s-label">Win Rate</div>
+      <div class="s-value" id="winRate">0%</div>
+      <div class="s-sub" id="winLoss">0W / 0L</div>
+    </div>
+    <div class="s-card animate-in delay-3" style="--accent:var(--purple)">
+      <div class="s-icon" style="background:rgba(139,92,246,.1)">📈</div>
+      <div class="s-label">Total Trades</div>
+      <div class="s-value" id="totalTrades">0</div>
+      <div class="s-sub" id="avgPnl">Avg P&L: ₹0</div>
+    </div>
+    <div class="s-card animate-in delay-4" style="--accent:var(--amber)">
+      <div class="s-icon" style="background:rgba(245,158,11,.1)">🏦</div>
+      <div class="s-label">Current Capital</div>
+      <div class="s-value" id="currentCapital">₹1,00,000</div>
+      <div class="s-sub" id="capitalChange">Initial: ₹1,00,000</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card animate-in delay-2">
+      <div class="chart-title">
+        <span>📈 Equity Curve</span>
+        <span class="badge" id="equityBadge" style="background:var(--green-bg);color:var(--green)">+0%</span>
+      </div>
+      <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
+    </div>
+    <div class="chart-card animate-in delay-3">
+      <div class="chart-title">
+        <span>📊 P&L by Stock</span>
+      </div>
+      <div class="chart-wrap"><canvas id="stockChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-grid">
+    <div class="stat-card animate-in delay-1">
+      <h3>📋 Performance Metrics</h3>
+      <div class="stat-row"><span class="label">Best Trade</span><span class="value green" id="bestTrade">—</span></div>
+      <div class="stat-row"><span class="label">Worst Trade</span><span class="value red" id="worstTrade">—</span></div>
+      <div class="stat-row"><span class="label">Avg Winner</span><span class="value green" id="avgWinner">—</span></div>
+      <div class="stat-row"><span class="label">Avg Loser</span><span class="value red" id="avgLoser">—</span></div>
+      <div class="stat-row"><span class="label">Profit Factor</span><span class="value" id="profitFactor">—</span></div>
+    </div>
+    <div class="stat-card animate-in delay-2">
+      <h3>🎯 Exit Analysis</h3>
+      <div class="stat-row"><span class="label">Target Hits</span><span class="value green" id="targetHits">0</span></div>
+      <div class="stat-row"><span class="label">Stop Loss Hits</span><span class="value red" id="slHits">0</span></div>
+      <div class="stat-row"><span class="label">Signal Exits</span><span class="value" id="signalExits">0</span></div>
+      <div class="stat-row"><span class="label">Avg Hold Time</span><span class="value" id="avgHold">—</span></div>
+      <div class="stat-row"><span class="label">Max Consec. Wins</span><span class="value green" id="maxConsecWins">0</span></div>
+    </div>
+    <div class="stat-card animate-in delay-3">
+      <h3>💹 Risk Metrics</h3>
+      <div class="stat-row"><span class="label">Max Drawdown</span><span class="value red" id="maxDrawdown">—</span></div>
+      <div class="stat-row"><span class="label">Risk/Reward Avg</span><span class="value" id="avgRR">—</span></div>
+      <div class="stat-row"><span class="label">Expectancy</span><span class="value" id="expectancy">—</span></div>
+      <div class="stat-row"><span class="label">Largest Win</span><span class="value green" id="largestWin">—</span></div>
+      <div class="stat-row"><span class="label">Largest Loss</span><span class="value red" id="largestLoss">—</span></div>
+    </div>
+  </div>
+
+  <!-- Trades Table -->
+  <div class="table-card animate-in delay-2">
+    <div class="table-header">
+      <h3>📝 All Trade Entries</h3>
+      <div class="table-filters">
+        <button class="filter-btn active" onclick="filterTrades('all',this)">All</button>
+        <button class="filter-btn" onclick="filterTrades('winners',this)">✅ Winners</button>
+        <button class="filter-btn" onclick="filterTrades('losers',this)">❌ Losers</button>
+        <button class="filter-btn" onclick="filterTrades('long',this)">🟢 Long</button>
+        <button class="filter-btn" onclick="filterTrades('short',this)">🔴 Short</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Symbol</th>
+            <th>Direction</th>
+            <th>Entry ₹</th>
+            <th>Exit ₹</th>
+            <th>Qty</th>
+            <th>P&L ₹</th>
+            <th>P&L %</th>
+            <th>Exit Reason</th>
+            <th>Entry Time</th>
+            <th>Exit Time</th>
+          </tr>
+        </thead>
+        <tbody id="tradesBody">
+          <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">Loading trades...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Daily P&L -->
+  <div class="chart-card animate-in delay-3" style="margin-bottom:28px">
+    <div class="chart-title"><span>📅 Daily P&L</span></div>
+    <div class="chart-wrap" style="height:220px"><canvas id="dailyChart"></canvas></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let allTrades = [];
+let equityChart, stockChart, dailyChart;
+
+// ── Formatting ──
+function formatINR(n) {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  let s;
+  if (abs >= 10000000) s = (abs/10000000).toFixed(2) + ' Cr';
+  else if (abs >= 100000) s = (abs/100000).toFixed(2) + ' L';
+  else s = abs.toLocaleString('en-IN', {maximumFractionDigits:2});
+  return sign + '₹' + s;
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return String(d).substring(0, 16);
+  return dt.toLocaleDateString('en-IN', {day:'2-digit', month:'short'}) + ' ' + dt.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:false});
+}
+
+// ── Demo Data ──
+function getDemoTrades() {
+  const symbols = ['RELIANCE','TCS','INFY','HDFCBANK','ICICIBANK','SBIN','BAJFINANCE','LT','WIPRO','TATAMOTORS'];
+  const trades = [];
+  let date = new Date('2026-05-24');
+  for (let i = 0; i < 25; i++) {
+    date = new Date(date.getTime() + (Math.random() * 2 + 0.5) * 86400000);
+    const sym = symbols[Math.floor(Math.random() * symbols.length)];
+    const dir = Math.random() > 0.4 ? 'LONG' : 'SHORT';
+    const entry = 1000 + Math.random() * 4000;
+    const pnlPct = (Math.random() - 0.35) * 6;
+    const exit_p = dir === 'LONG' ? entry * (1 + pnlPct/100) : entry * (1 - pnlPct/100);
+    const qty = Math.floor(10 + Math.random() * 40);
+    const pnl = (exit_p - entry) * qty * (dir === 'LONG' ? 1 : -1);
+    const reason = pnl > 0 ? (Math.random() > 0.3 ? 'TARGET HIT' : 'EXIT SIGNAL') : (Math.random() > 0.3 ? 'STOP LOSS HIT' : 'EXIT SIGNAL');
+    const exitDate = new Date(date.getTime() + Math.random() * 28800000);
+    trades.push({
+      symbol: sym, direction: dir,
+      entry_price: Math.round(entry * 100) / 100,
+      exit_price: Math.round(exit_p * 100) / 100,
+      stop_loss: Math.round((dir === 'LONG' ? entry * 0.985 : entry * 1.015) * 100) / 100,
+      target: Math.round((dir === 'LONG' ? entry * 1.03 : entry * 0.97) * 100) / 100,
+      qty, pnl: Math.round(pnl * 100) / 100,
+      pnl_pct: Math.round(pnlPct * 100) / 100,
+      exit_reason: reason,
+      entry_time: date.toISOString(),
+      exit_time: exitDate.toISOString()
+    });
+  }
+  return trades;
+}
+
+function getDemoPortfolio(trades) {
+  const totalPnl = trades.reduce((s, t) => s + t.pnl, 0);
+  return {
+    capital: 100000 + totalPnl,
+    initial_capital: 100000,
+    positions: {},
+    closed_trades: trades,
+    strategy: 'vwap_ema',
+    stocks: ['RELIANCE','TCS','INFY'],
+    started_at: '2026-05-24 09:15:00'
+  };
+}
+
+// ── Fetch Data ──
+async function loadData() {
+  let trades = [], portfolio = null;
+  try {
+    const [tRes, pRes] = await Promise.all([
+      fetch(API + '/api/trades').then(r => r.json()),
+      fetch(API + '/api/portfolio').then(r => r.json())
+    ]);
+    if (tRes.ok) trades = tRes.trades || [];
+    if (pRes.ok) portfolio = pRes.portfolio;
+  } catch(e) { console.log('API unavailable, using demo data'); }
+
+  if (!trades.length) {
+    trades = getDemoTrades();
+    portfolio = getDemoPortfolio(trades);
+  }
+  if (!portfolio) portfolio = getDemoPortfolio(trades);
+
+  if (!trades.length && portfolio.closed_trades && portfolio.closed_trades.length) {
+    trades = portfolio.closed_trades;
+  }
+
+  allTrades = trades;
+  renderDashboard(trades, portfolio);
+}
+
+// ── Render Dashboard ──
+function renderDashboard(trades, portfolio) {
+  const totalPnl = trades.reduce((s, t) => s + (t.pnl || 0), 0);
+  const winners = trades.filter(t => t.pnl > 0);
+  const losers = trades.filter(t => t.pnl <= 0);
+  const winRate = trades.length ? (winners.length / trades.length * 100) : 0;
+  const avgPnlVal = trades.length ? totalPnl / trades.length : 0;
+  const returnPct = portfolio.initial_capital ? (totalPnl / portfolio.initial_capital * 100) : 0;
+
+  // Summary cards
+  const pnlEl = document.getElementById('totalPnl');
+  pnlEl.textContent = formatINR(totalPnl);
+  pnlEl.style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('pnlCard').style.setProperty('--accent', totalPnl >= 0 ? 'var(--green)' : 'var(--red)');
+  const pnlPctEl = document.getElementById('totalPnlPct');
+  pnlPctEl.innerHTML = '<span class="arrow">' + (returnPct >= 0 ? '▲' : '▼') + '</span> ' + returnPct.toFixed(2) + '% return';
+  pnlPctEl.style.color = returnPct >= 0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('winRate').textContent = winRate.toFixed(1) + '%';
+  document.getElementById('winLoss').textContent = winners.length + 'W / ' + losers.length + 'L';
+  document.getElementById('totalTrades').textContent = trades.length;
+  document.getElementById('avgPnl').textContent = 'Avg P&L: ' + formatINR(avgPnlVal);
+  document.getElementById('currentCapital').textContent = formatINR(portfolio.capital);
+  document.getElementById('capitalChange').textContent = 'Initial: ' + formatINR(portfolio.initial_capital);
+
+  // Meta
+  document.getElementById('metaStrategy').textContent = 'Strategy: ' + (portfolio.strategy || '—');
+  document.getElementById('metaStarted').textContent = 'Started: ' + (portfolio.started_at ? String(portfolio.started_at).substring(0, 10) : '—');
+
+  // Performance metrics
+  const bestTrade = trades.length ? Math.max(...trades.map(t => t.pnl)) : 0;
+  const worstTrade = trades.length ? Math.min(...trades.map(t => t.pnl)) : 0;
+  const avgWinner = winners.length ? winners.reduce((s, t) => s + t.pnl, 0) / winners.length : 0;
+  const avgLoser = losers.length ? losers.reduce((s, t) => s + t.pnl, 0) / losers.length : 0;
+  const grossProfit = winners.reduce((s, t) => s + t.pnl, 0);
+  const grossLoss = Math.abs(losers.reduce((s, t) => s + t.pnl, 0));
+  const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss) : grossProfit > 0 ? '∞' : '0';
+
+  document.getElementById('bestTrade').textContent = formatINR(bestTrade);
+  document.getElementById('worstTrade').textContent = formatINR(worstTrade);
+  document.getElementById('avgWinner').textContent = formatINR(avgWinner);
+  document.getElementById('avgLoser').textContent = formatINR(avgLoser);
+  document.getElementById('profitFactor').textContent = typeof profitFactor === 'string' ? profitFactor : profitFactor.toFixed(2);
+
+  // Exit analysis
+  document.getElementById('targetHits').textContent = trades.filter(t => t.exit_reason && t.exit_reason.includes('TARGET')).length;
+  document.getElementById('slHits').textContent = trades.filter(t => t.exit_reason && t.exit_reason.includes('STOP')).length;
+  document.getElementById('signalExits').textContent = trades.filter(t => t.exit_reason && t.exit_reason.includes('EXIT')).length;
+
+  // Avg hold time
+  const holdTimes = trades.filter(t => t.entry_time && t.exit_time).map(t => {
+    return (new Date(t.exit_time) - new Date(t.entry_time)) / 3600000;
+  }).filter(h => !isNaN(h) && h > 0);
+  const avgHoldHrs = holdTimes.length ? holdTimes.reduce((s,h) => s+h, 0) / holdTimes.length : 0;
+  document.getElementById('avgHold').textContent = avgHoldHrs < 1 ? Math.round(avgHoldHrs*60) + 'm' : avgHoldHrs.toFixed(1) + 'h';
+
+  // Max consecutive wins
+  let maxWins = 0, curWins = 0;
+  trades.forEach(t => { if(t.pnl > 0){ curWins++; maxWins = Math.max(maxWins, curWins); } else curWins = 0; });
+  document.getElementById('maxConsecWins').textContent = maxWins;
+
+  // Risk metrics
+  let peak = 0, maxDD = 0, cumPnl = 0;
+  trades.forEach(t => {
+    cumPnl += t.pnl;
+    peak = Math.max(peak, cumPnl);
+    maxDD = Math.min(maxDD, cumPnl - peak);
+  });
+  document.getElementById('maxDrawdown').textContent = formatINR(maxDD);
+
+  const expectancy = trades.length ? (winRate/100 * avgWinner + (1-winRate/100) * avgLoser) : 0;
+  document.getElementById('expectancy').textContent = formatINR(expectancy);
+  document.getElementById('expectancy').style.color = expectancy >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('largestWin').textContent = formatINR(bestTrade);
+  document.getElementById('largestLoss').textContent = formatINR(worstTrade);
+
+  const avgRR = losers.length && avgLoser !== 0 ? Math.abs(avgWinner / avgLoser) : 0;
+  document.getElementById('avgRR').textContent = avgRR ? avgRR.toFixed(2) + ':1' : '—';
+
+  // Equity badge
+  const eqBadge = document.getElementById('equityBadge');
+  eqBadge.textContent = (returnPct >= 0 ? '+' : '') + returnPct.toFixed(2) + '%';
+  eqBadge.style.background = returnPct >= 0 ? 'var(--green-bg)' : 'var(--red-bg)';
+  eqBadge.style.color = returnPct >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Render charts & table
+  renderEquityChart(trades, portfolio.initial_capital);
+  renderStockChart(trades);
+  renderDailyChart(trades);
+  renderTradesTable(trades);
+}
+
+// ── Charts ──
+function renderEquityChart(trades, initialCapital) {
+  const labels = ['Start'];
+  const data = [initialCapital];
+  let cum = initialCapital;
+  trades.forEach((t, i) => {
+    cum += t.pnl;
+    labels.push('#' + (i+1));
+    data.push(Math.round(cum));
+  });
+
+  const ctx = document.getElementById('equityChart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+  const isPositive = cum >= initialCapital;
+  gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,.25)' : 'rgba(239,68,68,.25)');
+  gradient.addColorStop(1, 'rgba(10,14,23,0)');
+
+  if (equityChart) equityChart.destroy();
+  equityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Capital',
+        data,
+        borderColor: isPositive ? '#10b981' : '#ef4444',
+        backgroundColor: gradient,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: isPositive ? '#10b981' : '#ef4444',
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,.95)',
+          borderColor: 'rgba(255,255,255,.1)',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#94a3b8',
+          padding: 12,
+          cornerRadius: 8,
+          callbacks: { label: function(ctx) { return 'Capital: ₹' + ctx.raw.toLocaleString('en-IN'); } }
+        }
+      },
+      scales: {
+        x: { display: false },
+        y: {
+          grid: { color: 'rgba(255,255,255,.04)', drawBorder: false },
+          ticks: { color: '#64748b', font: { size: 11 }, callback: function(v){ return '₹' + (v/1000).toFixed(0) + 'K'; } },
+          border: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderStockChart(trades) {
+  const pnlByStock = {};
+  trades.forEach(t => { pnlByStock[t.symbol] = (pnlByStock[t.symbol] || 0) + t.pnl; });
+  const sorted = Object.entries(pnlByStock).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(s => s[0]);
+  const data = sorted.map(s => Math.round(s[1]));
+  const colors = data.map(d => d >= 0 ? 'rgba(16,185,129,.7)' : 'rgba(239,68,68,.7)');
+  const borderColors = data.map(d => d >= 0 ? '#10b981' : '#ef4444');
+
+  if (stockChart) stockChart.destroy();
+  stockChart = new Chart(document.getElementById('stockChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: colors, borderColor: borderColors, borderWidth: 1, borderRadius: 6, barPercentage: 0.7 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,.95)',
+          borderColor: 'rgba(255,255,255,.1)',
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: function(ctx) { return 'P&L: ₹' + ctx.raw.toLocaleString('en-IN'); } }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,.04)', drawBorder: false },
+          ticks: { color: '#64748b', font: { size: 10 }, callback: function(v){ return '₹' + (v >= 1000 ? (v/1000).toFixed(0)+'K' : v); } },
+          border: { display: false }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#94a3b8', font: { size: 11, weight: 600 } },
+          border: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderDailyChart(trades) {
+  const pnlByDay = {};
+  trades.forEach(t => {
+    const day = String(t.exit_time || t.entry_time || '').substring(0, 10);
+    if (day) pnlByDay[day] = (pnlByDay[day] || 0) + t.pnl;
+  });
+  const sorted = Object.entries(pnlByDay).sort((a,b) => a[0].localeCompare(b[0]));
+  const labels = sorted.map(s => {
+    const d = new Date(s[0]);
+    return isNaN(d) ? s[0] : d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'});
+  });
+  const data = sorted.map(s => Math.round(s[1]));
+  const colors = data.map(d => d >= 0 ? 'rgba(16,185,129,.6)' : 'rgba(239,68,68,.6)');
+
+  if (dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: colors, borderRadius: 4, barPercentage: 0.6 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,.95)',
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: function(ctx) { return 'Day P&L: ₹' + ctx.raw.toLocaleString('en-IN'); } }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } }, border: { display: false } },
+        y: { grid: { color: 'rgba(255,255,255,.04)', drawBorder: false }, ticks: { color: '#64748b', font: { size: 10 }, callback: function(v){ return '₹'+v; } }, border: { display: false } }
+      }
+    }
+  });
+}
+
+// ── Trades Table ──
+function renderTradesTable(trades, filter) {
+  filter = filter || 'all';
+  let filtered = trades;
+  if (filter === 'winners') filtered = trades.filter(t => t.pnl > 0);
+  else if (filter === 'losers') filtered = trades.filter(t => t.pnl <= 0);
+  else if (filter === 'long') filtered = trades.filter(t => t.direction === 'LONG');
+  else if (filter === 'short') filtered = trades.filter(t => t.direction === 'SHORT');
+
+  const tbody = document.getElementById('tradesBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">No trades found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(function(t, i) {
+    var isPos = t.pnl >= 0;
+    var dirClass = t.direction === 'LONG' ? 'long' : 'short';
+    var reasonClass = 'exit';
+    if (t.exit_reason && t.exit_reason.indexOf('TARGET') >= 0) reasonClass = 'target';
+    else if (t.exit_reason && t.exit_reason.indexOf('STOP') >= 0) reasonClass = 'sl';
+    var entryP = t.entry_price ? t.entry_price.toLocaleString('en-IN', {minimumFractionDigits:2}) : '—';
+    var exitP = t.exit_price ? t.exit_price.toLocaleString('en-IN', {minimumFractionDigits:2}) : '—';
+    var pnlVal = t.pnl ? t.pnl.toLocaleString('en-IN', {minimumFractionDigits:2}) : '0';
+    var pnlPctVal = t.pnl_pct ? t.pnl_pct.toFixed(2) : '0';
+    return '<tr>' +
+      '<td style="color:var(--text3)">' + (i + 1) + '</td>' +
+      '<td style="font-weight:700">' + t.symbol + '</td>' +
+      '<td><span class="badge-dir ' + dirClass + '">' + t.direction + '</span></td>' +
+      '<td>₹' + entryP + '</td>' +
+      '<td>₹' + exitP + '</td>' +
+      '<td>' + (t.qty || '—') + '</td>' +
+      '<td class="pnl-cell ' + (isPos ? 'pos' : 'neg') + '">' + (isPos ? '+' : '') + '₹' + pnlVal + '</td>' +
+      '<td class="pnl-cell ' + (isPos ? 'pos' : 'neg') + '">' + (isPos ? '+' : '') + pnlPctVal + '%</td>' +
+      '<td><span class="reason-badge ' + reasonClass + '">' + (t.exit_reason || '—') + '</span></td>' +
+      '<td style="color:var(--text3);font-size:12px">' + formatDate(t.entry_time) + '</td>' +
+      '<td style="color:var(--text3);font-size:12px">' + formatDate(t.exit_time) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function filterTrades(filter, btn) {
+  document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderTradesTable(allTrades, filter);
+}
+
+// ── Init ──
+loadData();
+</script>
+</body>
+</html>

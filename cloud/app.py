@@ -4,6 +4,7 @@ Runs on Render.com, serves dashboard + background ORB scanner
 """
 import os
 import json
+from pathlib import Path
 import hashlib
 import threading
 import time
@@ -12,6 +13,8 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template
 from scanner import ORBScanner
 from telegram_bot import send_telegram
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # points to d:\trading
 
 app = Flask(__name__)
 
@@ -35,6 +38,49 @@ SECRET = os.environ.get('FYERS_SECRET', 'M4RUQHA4T0')
 REDIRECT = 'https://127.0.0.1'
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
+
+
+# ── Auto-load token from local file ──
+def auto_load_token():
+    """Try to load saved Fyers token from .fyers_token.json."""
+    token_file = BASE_DIR / '.fyers_token.json'
+    if token_file.exists():
+        try:
+            with open(token_file, 'r') as f:
+                data = json.load(f)
+            token = data.get('access_token')
+            expires = data.get('expires_at', '')
+            if token and expires:
+                exp_dt = datetime.fromisoformat(expires)
+                if exp_dt > datetime.now():
+                    state['token'] = token
+                    print(f"[AUTO] Loaded Fyers token (expires {expires})")
+                    return True
+                else:
+                    print("[AUTO] Token expired, need fresh login")
+            else:
+                print("[AUTO] No valid token found in file")
+        except Exception as e:
+            print(f"[AUTO] Error loading token: {e}")
+    return False
+
+
+def auto_start_scanner():
+    """Auto-start scanner if token is loaded and market hours."""
+    if state['token'] and not state['scanning']:
+        now = datetime.now()
+        h, m = now.hour, now.minute
+        if (h > 9 or (h == 9 and m >= 15)) and (h < 15 or (h == 15 and m <= 30)):
+            state['scanning'] = True
+            state['started_at'] = now.strftime('%H:%M:%S')
+            state['scan_count'] = 0
+            state['results'] = []
+            t = threading.Thread(target=scan_loop, daemon=True)
+            t.start()
+            print(f"[AUTO] Scanner started at {state['started_at']}")
+            send_alert('🚀 ORB Scanner auto-started!')
+        else:
+            print(f"[AUTO] Outside market hours ({h}:{m:02d}), scanner not started")
 
 
 # ── Routes ──
@@ -142,6 +188,43 @@ def health():
     return 'OK'
 
 
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html')
+
+
+@app.route('/api/trades', methods=['GET'])
+def get_trades():
+    """Return all closed trades from trade_log.json."""
+    trade_log = BASE_DIR / 'trade_log.json'
+    if trade_log.exists():
+        with open(trade_log, 'r') as f:
+            trades = json.load(f)
+    else:
+        trades = []
+    return jsonify({'ok': True, 'trades': trades})
+
+
+@app.route('/api/portfolio', methods=['GET'])
+def get_portfolio():
+    """Return current portfolio state from live_state.json."""
+    state_file = BASE_DIR / 'live_state.json'
+    if state_file.exists():
+        with open(state_file, 'r') as f:
+            portfolio = json.load(f)
+    else:
+        portfolio = {
+            'capital': 100000,
+            'initial_capital': 100000,
+            'positions': {},
+            'closed_trades': [],
+            'strategy': None,
+            'stocks': [],
+            'started_at': None
+        }
+    return jsonify({'ok': True, 'portfolio': portfolio})
+
+
 # ── Scanner Loop ──
 
 def scan_loop():
@@ -245,8 +328,14 @@ def send_alert(message):
         try:
             send_telegram(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, message)
         except Exception as e:
-            print(f"Telegram error: {e}")
-    print(f"[ALERT] {message}")
+            try:
+                print(f"Telegram error: {e}")
+            except UnicodeEncodeError:
+                print("Telegram error")
+    try:
+        print(f"[ALERT] {message}")
+    except UnicodeEncodeError:
+        print(f"[ALERT] {message.encode('ascii', 'replace').decode()}")
 
 
 # ── Keep-alive ping ──
@@ -261,6 +350,10 @@ def keep_alive():
             pass
 
 threading.Thread(target=keep_alive, daemon=True).start()
+
+# ── Auto-start on launch ──
+if auto_load_token():
+    auto_start_scanner()
 
 
 if __name__ == '__main__':
